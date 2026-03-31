@@ -1,4 +1,4 @@
-const API_BASE = '';
+const API_BASE = 'https://hospitalordermanagement.onrender.com';
 const REFRESH_INTERVAL = 3000;
 
 // ── on page load ──────────────────────────────────────────────────────
