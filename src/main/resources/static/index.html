@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital Order Management System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<h1>Hospital Order Management System</h1>
+
+<!-- ── Submit Order ─────────────────────────────────────────────── -->
+<div class="section">
+    <h2>Submit Order</h2>
+    <div class="form-group">
+        <label>Order Type:</label>
+        <select id="orderType">
+            <option value="LAB">Lab</option>
+            <option value="MEDICATION">Medication</option>
+            <option value="IMAGING">Imaging</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Patient Name:</label>
+        <input type="text" id="patientName"
+               placeholder="e.g. John Smith">
+    </div>
+    <div class="form-group">
+        <label>Clinician:</label>
+        <input type="text" id="clinician"
+               placeholder="e.g. Dr. Jones">
+    </div>
+    <div class="form-group">
+        <label>Description:</label>
+        <input type="text" id="description"
+               placeholder="e.g. Blood glucose test">
+    </div>
+    <div class="form-group">
+        <label>Priority:</label>
+        <select id="priority">
+            <option value="ROUTINE">Routine</option>
+            <option value="URGENT">Urgent</option>
+            <option value="STAT">Stat</option>
+        </select>
+    </div>
+    <button onclick="submitOrder()">Submit Order</button>
+    <div id="submitMessage"></div>
+</div>
+
+<!-- ── Claim Order ──────────────────────────────────────────────── -->
+<div class="section">
+    <h2>Claim / Complete Order</h2>
+    <div class="form-group">
+        <label>Staff Name:</label>
+        <input type="text" id="staffName"
+               placeholder="e.g. Nurse Williams">
+    </div>
+    <div id="claimMessage"></div>
+</div>
+
+<!-- ── Order Queue ──────────────────────────────────────────────── -->
+<div class="section">
+    <h2>Order Queue
+        <span id="lastUpdated"
+              style="font-size:13px; color:#888;"></span>
+    </h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Type</th>
+            <th>Patient</th>
+            <th>Clinician</th>
+            <th>Description</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Time</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody id="ordersTable">
+        <tr><td colspan="8">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ── Audit Trail ──────────────────────────────────────────────── -->
+<div class="section">
+    <h2>Audit Trail</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Time</th>
+            <th>Action</th>
+            <th>Order ID</th>
+            <th>Actor</th>
+        </tr>
+        </thead>
+        <tbody id="auditTable">
+        <tr><td colspan="4">No actions yet</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

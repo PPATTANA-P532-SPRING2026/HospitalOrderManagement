@@ -1,4 +1,7 @@
 package com.pm.ordersystem.model.enums;
 
-public class Priority {
+public enum Priority {
+    ROUTINE,
+    URGENT,
+    STAT
 }
