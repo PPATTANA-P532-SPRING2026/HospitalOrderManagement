@@ -14,87 +14,113 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class NotificationServiceTest {
 
-    // mock that captures notifications
+    // ── mock that captures messages ───────────────────────────────────
     private static class MockNotificationService
             implements NotificationService {
-        List<String> events = new ArrayList<>();
-        List<Order> orders  = new ArrayList<>();
+
+        List<String> events  = new ArrayList<>();
+        List<Order>  orders  = new ArrayList<>();
 
         @Override
-        public void notify(Order order, String event) {
+        public void onOrderStatusChanged(Order order, String event) {
             events.add(event);
             orders.add(order);
         }
     }
 
-    private MockNotificationService mockService;
+    private MockNotificationService mockNotifier;
+    private Order testOrder;
 
     @BeforeEach
     void setUp() {
         // Arrange
-        mockService = new MockNotificationService();
+        mockNotifier = new MockNotificationService();
+        testOrder    = OrderFactory.create(
+                OrderType.LAB,
+                "John Smith",
+                "Dr. Jones",
+                "Blood glucose test",
+                Priority.URGENT
+        );
     }
 
     @Test
-    void notify_captures_event() {
-        // Arrange
-        Order order = OrderFactory.create(OrderType.LAB,
-                "John Smith", "Dr. Jones",
-                "Blood test", Priority.ROUTINE);
-
+    void notify_captures_submitted_event() {
         // Act
-        mockService.notify(order, "SUBMITTED");
+        mockNotifier.onOrderStatusChanged(testOrder, "SUBMITTED");
 
         // Assert
-        assertEquals(1, mockService.events.size());
-        assertEquals("SUBMITTED", mockService.events.get(0));
+        assertEquals(1, mockNotifier.events.size());
+        assertEquals("SUBMITTED", mockNotifier.events.get(0));
+        assertEquals(testOrder, mockNotifier.orders.get(0));
     }
 
     @Test
-    void notify_captures_order() {
-        // Arrange
-        Order order = OrderFactory.create(OrderType.LAB,
-                "John Smith", "Dr. Jones",
-                "Blood test", Priority.ROUTINE);
-
+    void notify_captures_claimed_event() {
         // Act
-        mockService.notify(order, "CLAIMED");
+        mockNotifier.onOrderStatusChanged(testOrder, "CLAIMED");
 
         // Assert
-        assertEquals(order.getId(),
-                mockService.orders.get(0).getId());
+        assertEquals("CLAIMED", mockNotifier.events.get(0));
+    }
+
+    @Test
+    void notify_captures_completed_event() {
+        // Act
+        mockNotifier.onOrderStatusChanged(testOrder, "COMPLETED");
+
+        // Assert
+        assertEquals("COMPLETED", mockNotifier.events.get(0));
+    }
+
+    @Test
+    void notify_captures_cancelled_event() {
+        // Act
+        mockNotifier.onOrderStatusChanged(testOrder, "CANCELLED");
+
+        // Assert
+        assertEquals("CANCELLED", mockNotifier.events.get(0));
+    }
+
+    @Test
+    void notify_captures_multiple_events() {
+        // Act
+        mockNotifier.onOrderStatusChanged(testOrder, "SUBMITTED");
+        mockNotifier.onOrderStatusChanged(testOrder, "CLAIMED");
+        mockNotifier.onOrderStatusChanged(testOrder, "COMPLETED");
+
+        // Assert
+        assertEquals(3, mockNotifier.events.size());
+        assertEquals("SUBMITTED",  mockNotifier.events.get(0));
+        assertEquals("CLAIMED",    mockNotifier.events.get(1));
+        assertEquals("COMPLETED",  mockNotifier.events.get(2));
     }
 
     @Test
     void console_notifier_does_not_throw() {
         // Arrange
-        ConsoleNotificationService service =
+        ConsoleNotificationService console =
                 new ConsoleNotificationService();
-        Order order = OrderFactory.create(OrderType.LAB,
-                "John Smith", "Dr. Jones",
-                "Blood test", Priority.ROUTINE);
 
         // Act + Assert
         assertDoesNotThrow(() ->
-                service.notify(order, "SUBMITTED"));
+                console.onOrderStatusChanged(testOrder, "SUBMITTED"));
     }
 
     @Test
-    void notify_called_for_each_event() {
+    void multiple_observers_all_receive_event() {
         // Arrange
-        Order order = OrderFactory.create(OrderType.LAB,
-                "John Smith", "Dr. Jones",
-                "Blood test", Priority.ROUTINE);
+        MockNotificationService observer1 = new MockNotificationService();
+        MockNotificationService observer2 = new MockNotificationService();
 
         // Act
-        mockService.notify(order, "SUBMITTED");
-        mockService.notify(order, "CLAIMED");
-        mockService.notify(order, "COMPLETED");
+        observer1.onOrderStatusChanged(testOrder, "SUBMITTED");
+        observer2.onOrderStatusChanged(testOrder, "SUBMITTED");
 
-        // Assert
-        assertEquals(3, mockService.events.size());
-        assertEquals("SUBMITTED", mockService.events.get(0));
-        assertEquals("CLAIMED",   mockService.events.get(1));
-        assertEquals("COMPLETED", mockService.events.get(2));
+        // Assert — both observers received the event
+        assertEquals(1, observer1.events.size());
+        assertEquals(1, observer2.events.size());
+        assertEquals("SUBMITTED", observer1.events.get(0));
+        assertEquals("SUBMITTED", observer2.events.get(0));
     }
 }

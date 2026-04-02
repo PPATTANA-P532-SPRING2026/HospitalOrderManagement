@@ -10,6 +10,7 @@ import com.pm.ordersystem.model.order.OrderFactory;
 import com.pm.ordersystem.notification.NotificationService;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -18,25 +19,37 @@ public class OrderManager {
     private final OrderAccess orderAccess;
     private final TriagingEngine triagingEngine;
     private final OrderHandler orderHandler;
-    private final NotificationService notificationService;
     private final CommandLog commandLog;
+    private final List<NotificationService> observers;
 
     public OrderManager(OrderAccess orderAccess,
                         TriagingEngine triagingEngine,
                         OrderHandler orderHandler,
-                        NotificationService notificationService,
-                        CommandLog commandLog) {
-        this.orderAccess         = orderAccess;
-        this.triagingEngine      = triagingEngine;
-        this.orderHandler        = orderHandler;
-        this.notificationService = notificationService;
-        this.commandLog          = commandLog;
+                        CommandLog commandLog,
+                        List<NotificationService> observers) {
+        this.orderAccess    = orderAccess;
+        this.triagingEngine = triagingEngine;
+        this.orderHandler   = orderHandler;
+        this.commandLog     = commandLog;
+        this.observers      = new ArrayList<>(observers);
+    }
+
+    // ── Observer registration ─────────────────────────────────────────
+    public void register(NotificationService observer) {
+        observers.add(observer);
+    }
+
+    // ── Notify all observers ──────────────────────────────────────────
+    private void notifyObservers(Order order, String event) {
+        for (NotificationService observer : observers) {
+            observer.onOrderStatusChanged(order, event);
+        }
     }
 
     //  Submit Order
     public Order handle(SubmitOrderCommand cmd) {
 
-        // create correct order subtype via Factory
+        // 1. create correct order subtype via Factory
         Order order = OrderFactory.create(
                 cmd.getType(),
                 cmd.getPatientName(),
@@ -51,16 +64,15 @@ public class OrderManager {
 
         //  assign position in queue via triage engine
         List<Order> currentQueue = orderAccess.listPendingOrders();
-        List<Order> sortedQueue  = triagingEngine.assignPosition(
-                order, currentQueue);
+        triagingEngine.assignPosition(order, currentQueue);
 
-        // save order to store
+        //  save order to store
         orderAccess.saveOrder(order);
 
-        //  notify relevant parties
-        notificationService.notify(order, "SUBMITTED");
+        //  notify all registered observers
+        notifyObservers(order, "SUBMITTED");
 
-        // record command in audit log
+        //  record command in audit log
         commandLog.record("SUBMIT", order.getId(),
                 cmd.getClinician());
 
@@ -70,12 +82,12 @@ public class OrderManager {
     //  Claim Order
     public Order handle(ClaimOrderCommand cmd) {
 
-        // find the order
+        // 1. find the order
         Order order = orderAccess.findOrderById(cmd.getOrderId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Order not found: " + cmd.getOrderId()));
 
-        // validate it is still pending
+        // 2. validate it is still pending
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new IllegalStateException(
                     "Order " + cmd.getOrderId()
@@ -83,15 +95,15 @@ public class OrderManager {
                             + order.getStatus());
         }
 
-        // claim it
+        // 3. claim it
         order.setStatus(OrderStatus.IN_PROGRESS);
         order.setClaimedBy(cmd.getClaimedBy());
         orderAccess.saveOrder(order);
 
-        // notify
-        notificationService.notify(order, "CLAIMED");
+        // 4. notify all observers
+        notifyObservers(order, "CLAIMED");
 
-        // record command
+        // 5. record command
         commandLog.record("CLAIM", order.getId(),
                 cmd.getClaimedBy());
 
@@ -101,12 +113,12 @@ public class OrderManager {
     //  Complete Order
     public Order handle(CompleteOrderCommand cmd) {
 
-        // find the order
+        // 1. find the order
         Order order = orderAccess.findOrderById(cmd.getOrderId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Order not found: " + cmd.getOrderId()));
 
-        // validate it is in progress
+        // 2. validate it is in progress
         if (order.getStatus() != OrderStatus.IN_PROGRESS) {
             throw new IllegalStateException(
                     "Order " + cmd.getOrderId()
@@ -114,29 +126,29 @@ public class OrderManager {
                             + order.getStatus());
         }
 
-        //  complete it
+        // 3. complete it
         order.setStatus(OrderStatus.COMPLETED);
         orderAccess.saveOrder(order);
 
-        // notify
-        notificationService.notify(order, "COMPLETED");
+        // 4. notify all observers
+        notifyObservers(order, "COMPLETED");
 
-        //  record command
+        // 5. record command
         commandLog.record("COMPLETE", order.getId(),
                 cmd.getActor());
 
         return order;
     }
 
-    //  Cancel Order
+    // Cancel Order
     public Order handle(CancelOrderCommand cmd) {
 
-        // find the order
+        // 1. find the order
         Order order = orderAccess.findOrderById(cmd.getOrderId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Order not found: " + cmd.getOrderId()));
 
-        // validate it is still pending
+        // 2. validate it is still pending
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new IllegalStateException(
                     "Order " + cmd.getOrderId()
@@ -144,21 +156,21 @@ public class OrderManager {
                             + order.getStatus());
         }
 
-        // cancel it
+        // 3. cancel it
         order.setStatus(OrderStatus.CANCELLED);
         orderAccess.saveOrder(order);
 
-        // notify
-        notificationService.notify(order, "CANCELLED");
+        // 4. notify all observers
+        notifyObservers(order, "CANCELLED");
 
-        // record command
+        // 5. record command
         commandLog.record("CANCEL", order.getId(),
                 cmd.getActor());
 
         return order;
     }
 
-    //Query methods
+    //  Query methods
     public List<Order> getPendingOrders() {
         return orderAccess.listPendingOrders();
     }

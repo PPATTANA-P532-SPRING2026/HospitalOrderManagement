@@ -16,7 +16,7 @@ public class AuditController {
         this.orderManager = orderManager;
     }
 
-    // ── GET /api/audit — get full audit trail ─────────────────────────
+    //  GET /api/audit — get full audit trail
     @GetMapping
     public List<CommandLogEntry> getAuditLog() {
         return orderManager.getAuditLog();

@@ -33,6 +33,6 @@ public class SubmitOrderCommand implements Command {
     @Override
     public void execute() {
         // execution delegated to OrderManager
-        // command just carries the data
+
     }
 }

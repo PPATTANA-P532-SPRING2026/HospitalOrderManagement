@@ -19,7 +19,7 @@ public class OrderAccess {
         this.orderStore = orderStore;
     }
 
-    // ── business verbs ────────────────────────────────────────────────
+    //  business verbs
 
     public void saveOrder(Order order) {
         // if order already exists update it in place

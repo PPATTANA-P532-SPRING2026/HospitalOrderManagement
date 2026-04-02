@@ -1,19 +1,19 @@
 const API_BASE = 'https://hospitalordermanagement.onrender.com';
 const REFRESH_INTERVAL = 3000;
 
-// ── on page load ──────────────────────────────────────────────────────
+//  on page load
 window.onload = function () {
     refreshAll();
     setInterval(refreshAll, REFRESH_INTERVAL);
 };
 
-// ── refresh everything ────────────────────────────────────────────────
+//  refresh everything
 function refreshAll() {
     fetchOrders();
     fetchAuditLog();
 }
 
-// ── fetch all orders ──────────────────────────────────────────────────
+//  fetch all orders
 function fetchOrders() {
     fetch(`${API_BASE}/api/orders`)
         .then(res => res.json())
@@ -61,7 +61,7 @@ function fetchOrders() {
         .catch(err => console.error('Error fetching orders:', err));
 }
 
-// ── build action buttons per order status ─────────────────────────────
+//  build action buttons per order status
 function buildActions(order) {
     if (order.status === 'PENDING') {
         return `
@@ -86,7 +86,7 @@ function buildActions(order) {
     return '—';
 }
 
-// ── submit order ──────────────────────────────────────────────────────
+// submit order
 function submitOrder() {
     const type        = document.getElementById('orderType').value;
     const patientName = document.getElementById('patientName').value;
@@ -115,7 +115,7 @@ function submitOrder() {
     .catch(err => console.error('Error submitting order:', err));
 }
 
-// ── claim order ───────────────────────────────────────────────────────
+//  claim order
 function claimOrder(orderId) {
     const staffName = document.getElementById('staffName').value;
     if (!staffName) {
@@ -142,7 +142,7 @@ function claimOrder(orderId) {
     .catch(err => console.error('Error claiming order:', err));
 }
 
-// ── complete order ────────────────────────────────────────────────────
+//  complete order
 function completeOrder(orderId) {
     const staffName = document.getElementById('staffName').value;
     if (!staffName) {
@@ -169,7 +169,7 @@ function completeOrder(orderId) {
     .catch(err => console.error('Error completing order:', err));
 }
 
-// ── cancel order ──────────────────────────────────────────────────────
+//  cancel order
 function cancelOrder(orderId) {
     const staffName = document.getElementById('staffName').value
                    || 'System';
@@ -192,7 +192,7 @@ function cancelOrder(orderId) {
     .catch(err => console.error('Error cancelling order:', err));
 }
 
-// ── fetch audit log ───────────────────────────────────────────────────
+//  fetch audit log
 function fetchAuditLog() {
     fetch(`${API_BASE}/api/audit`)
         .then(res => res.json())
@@ -222,14 +222,14 @@ function fetchAuditLog() {
         .catch(err => console.error('Error fetching audit log:', err));
 }
 
-// ── clear form ────────────────────────────────────────────────────────
+//  clear form
 function clearForm() {
     document.getElementById('patientName').value  = '';
     document.getElementById('clinician').value    = '';
     document.getElementById('description').value  = '';
 }
 
-// ── show message helper ───────────────────────────────────────────────
+// show message helper
 function showMessage(elementId, message, type) {
     const el = document.getElementById(elementId);
     el.textContent = message;
