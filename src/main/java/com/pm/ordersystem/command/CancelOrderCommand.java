@@ -1,20 +1,55 @@
 package com.pm.ordersystem.command;
 
+import com.pm.ordersystem.access.OrderAccess;
+import com.pm.ordersystem.model.enums.OrderStatus;
+import com.pm.ordersystem.model.order.Order;
+import com.pm.ordersystem.notification.NotificationService;
+
+import java.util.List;
+
 public class CancelOrderCommand implements Command {
 
+    // ── data ──────────────────────────────────────────────────────────
     private final String orderId;
     private final String actor;
 
-    public CancelOrderCommand(String orderId, String actor) {
-        this.orderId = orderId;
-        this.actor   = actor;
+    // ── dependencies ──────────────────────────────────────────────────
+    private final OrderAccess orderAccess;
+    private final List<NotificationService> observers;
+
+    public CancelOrderCommand(String orderId,
+                              String actor,
+                              OrderAccess orderAccess,
+                              List<NotificationService> observers) {
+        this.orderId     = orderId;
+        this.actor       = actor;
+        this.orderAccess = orderAccess;
+        this.observers   = observers;
+    }
+
+    @Override
+    public void execute() {
+        // 1. find the order
+        Order order = orderAccess.findOrderById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Order not found: " + orderId));
+
+        // 2. validate
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Order cannot be cancelled — status is "
+                            + order.getStatus());
+        }
+
+        // 3. cancel it
+        order.setStatus(OrderStatus.CANCELLED);
+        orderAccess.saveOrder(order);
+
+        // 4. notify
+        observers.forEach(o ->
+                o.onOrderStatusChanged(order, "CANCELLED"));
     }
 
     public String getOrderId() { return orderId; }
     public String getActor()   { return actor; }
-
-    @Override
-    public void execute() {
-        // execution delegated to OrderManager
-    }
 }

@@ -1,12 +1,15 @@
 package com.pm.ordersystem.client;
 
+import com.pm.ordersystem.access.OrderAccess;
 import com.pm.ordersystem.command.ClaimOrderCommand;
 import com.pm.ordersystem.command.CompleteOrderCommand;
 import com.pm.ordersystem.manager.OrderManager;
 import com.pm.ordersystem.model.order.Order;
+import com.pm.ordersystem.notification.NotificationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -14,12 +17,17 @@ import java.util.Map;
 public class FulfilmentController {
 
     private final OrderManager orderManager;
+    private final OrderAccess orderAccess;
+    private final List<NotificationService> observers;
 
-    public FulfilmentController(OrderManager orderManager) {
+    public FulfilmentController(OrderManager orderManager,
+                                OrderAccess orderAccess,
+                                List<NotificationService> observers) {
         this.orderManager = orderManager;
+        this.orderAccess  = orderAccess;
+        this.observers    = observers;
     }
 
-    // claim an order
     @PostMapping("/{id}/claim")
     public ResponseEntity<?> claimOrder(
             @PathVariable String id,
@@ -27,17 +35,19 @@ public class FulfilmentController {
         try {
             ClaimOrderCommand cmd = new ClaimOrderCommand(
                     id,
-                    body.get("claimedBy")
+                    body.get("claimedBy"),
+                    orderAccess,
+                    observers
             );
             Order order = orderManager.handle(cmd);
             return ResponseEntity.ok(order);
 
-        } catch (IllegalArgumentException | IllegalStateException e) {
+        } catch (IllegalArgumentException |
+                 IllegalStateException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-    //  complete an order
     @PostMapping("/{id}/complete")
     public ResponseEntity<?> completeOrder(
             @PathVariable String id,
@@ -45,12 +55,15 @@ public class FulfilmentController {
         try {
             CompleteOrderCommand cmd = new CompleteOrderCommand(
                     id,
-                    body.get("actor")
+                    body.get("actor"),
+                    orderAccess,
+                    observers
             );
             Order order = orderManager.handle(cmd);
             return ResponseEntity.ok(order);
 
-        } catch (IllegalArgumentException | IllegalStateException e) {
+        } catch (IllegalArgumentException |
+                 IllegalStateException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
