@@ -1,6 +1,7 @@
 const API_BASE = 'https://hospitalordermanagement-1.onrender.com';
 const REFRESH_INTERVAL = 3000;
 
+
 // ── on page load
 window.onload = function () {
     fetchStrategy();
@@ -14,7 +15,6 @@ window.onload = function () {
 function refreshAll() {
     fetchOrders();
     fetchAuditLog();
-    fetchStaff();
     fetchBadge();
 }
 
@@ -55,8 +55,7 @@ function fetchOrders() {
             });
 
             document.getElementById('lastUpdated').textContent =
-                'Last updated: '
-                + new Date().toLocaleTimeString();
+                'Last updated: ' + new Date().toLocaleTimeString();
         })
         .catch(err =>
             console.error('Error fetching orders:', err));
@@ -89,10 +88,19 @@ function buildActions(order) {
 
 // ── submit order
 function submitOrder() {
+    const clinician =
+        document.getElementById('clinicianSelect').value;
+
+    if (!clinician) {
+        showMessage('submitMessage',
+            'Please select a clinician', 'error');
+        return;
+    }
+
     const body = {
         type:        document.getElementById('orderType').value,
         patientName: document.getElementById('patientName').value,
-        clinician:   document.getElementById('clinician').value,
+        clinician:   clinician,
         description: document.getElementById('description').value,
         priority:    document.getElementById('priority').value
     };
@@ -120,10 +128,10 @@ function submitOrder() {
 // ── claim order
 function claimOrder(orderId) {
     const staffName =
-        document.getElementById('staffName').value;
+        document.getElementById('staffSelect').value;
     if (!staffName) {
         showMessage('claimMessage',
-            'Please enter staff name before claiming', 'error');
+            'Please select a staff member first', 'error');
         return;
     }
 
@@ -149,10 +157,10 @@ function claimOrder(orderId) {
 // ── complete order
 function completeOrder(orderId) {
     const staffName =
-        document.getElementById('staffName').value;
+        document.getElementById('staffSelect').value;
     if (!staffName) {
         showMessage('claimMessage',
-            'Please enter staff name before completing', 'error');
+            'Please select a staff member first', 'error');
         return;
     }
 
@@ -178,7 +186,7 @@ function completeOrder(orderId) {
 // ── cancel order
 function cancelOrder(orderId) {
     const staffName =
-        document.getElementById('staffName').value || 'System';
+        document.getElementById('staffSelect').value || 'System';
 
     fetch(`${API_BASE}/api/orders/${orderId}`, {
         method: 'DELETE',
@@ -312,7 +320,7 @@ function changeStrategy() {
 
 // ── update notification channels
 function updateChannels() {
-    const channels = ['console']; // console always on
+    const channels = ['console'];
     if (document.getElementById('chInApp').checked)
         channels.push('inapp');
     if (document.getElementById('chEmail').checked)
@@ -398,11 +406,12 @@ function registerStaff() {
         console.error('Error registering staff:', err));
 }
 
-// ── fetch staff list
+// ── fetch staff + populate dropdowns
 function fetchStaff() {
     fetch(`${API_BASE}/api/staff`)
         .then(res => res.json())
         .then(data => {
+            // update staff table
             const tbody =
                 document.getElementById('staffTable');
             tbody.innerHTML = '';
@@ -410,17 +419,59 @@ function fetchStaff() {
             if (data.length === 0) {
                 tbody.innerHTML =
                     '<tr><td colspan="2">No staff registered</td></tr>';
-                return;
+            } else {
+                data.forEach(member => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${member.name}</td>
+                        <td>${member.role}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
             }
 
-            data.forEach(member => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${member.name}</td>
-                    <td>${member.role}</td>
-                `;
-                tbody.appendChild(row);
+            // ── populate clinician dropdown
+            const clinicianSelect =
+                document.getElementById('clinicianSelect');
+            const currentClinician = clinicianSelect.value;
+            clinicianSelect.innerHTML =
+                '<option value="">-- Select Clinician --</option>';
+
+            const clinicians = data.filter(m =>
+                m.role === 'DOCTOR' || m.role === 'NURSE');
+
+            clinicians.forEach(member => {
+                const opt = document.createElement('option');
+                opt.value = member.name;
+                opt.textContent = member.name
+                        + ' (' + member.role + ')';
+                clinicianSelect.appendChild(opt);
             });
+
+            // restore previous selection if still valid
+            if (currentClinician) {
+                clinicianSelect.value = currentClinician;
+            }
+
+            // ── populate staff dropdown for claim/complete
+            const staffSelect =
+                document.getElementById('staffSelect');
+            const currentStaff = staffSelect.value;
+            staffSelect.innerHTML =
+                '<option value="">-- Select Staff --</option>';
+
+            data.forEach(member => {
+                const opt = document.createElement('option');
+                opt.value = member.name;
+                opt.textContent = member.name
+                        + ' (' + member.role + ')';
+                staffSelect.appendChild(opt);
+            });
+
+            // restore previous selection if still valid
+            if (currentStaff) {
+                staffSelect.value = currentStaff;
+            }
         })
         .catch(err =>
             console.error('Error fetching staff:', err));
@@ -428,9 +479,9 @@ function fetchStaff() {
 
 // ── clear form
 function clearForm() {
-    document.getElementById('patientName').value = '';
-    document.getElementById('clinician').value   = '';
-    document.getElementById('description').value = '';
+    document.getElementById('patientName').value  = '';
+    document.getElementById('description').value  = '';
+    document.getElementById('clinicianSelect').value = '';
 }
 
 // ── show message helper

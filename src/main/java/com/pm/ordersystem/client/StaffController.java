@@ -50,4 +50,14 @@ public class StaffController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+
+    //  GET /api/staff/clinicians — list clinicians
+    @GetMapping("/clinicians")
+    public List<StaffMember> getClinicians() {
+        return staffAccess.listAllStaff()
+                .stream()
+                .filter(s -> s.getRole().equals("DOCTOR")
+                        || s.getRole().equals("NURSE"))
+                .collect(java.util.stream.Collectors.toList());
+    }
 }
