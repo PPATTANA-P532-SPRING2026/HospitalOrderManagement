@@ -71,7 +71,7 @@ public class SubmitOrderCommand implements Command {
                 o.onOrderStatusChanged(createdOrder, "SUBMITTED"));
     }
 
-    // ── getters ───────────────────────────────────────────────────────
+    //  getters
     public OrderType getType()     { return type; }
     public String getPatientName() { return patientName; }
     public String getClinician()   { return clinician; }

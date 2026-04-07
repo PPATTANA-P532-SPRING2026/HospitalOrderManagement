@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-
+@Component
 public class PriorityFirstStrategy implements TriageStrategy {
 
     @Override
@@ -26,7 +26,7 @@ public class PriorityFirstStrategy implements TriageStrategy {
         return queue;
     }
 
-    // ── STAT = 2, URGENT = 1, ROUTINE = 0 ────────────────────────────
+    // ── STAT = 2, URGENT = 1, ROUTINE = 0
     private int priorityValue(Order order) {
         return switch (order.getPriority()) {
             case STAT    -> 2;

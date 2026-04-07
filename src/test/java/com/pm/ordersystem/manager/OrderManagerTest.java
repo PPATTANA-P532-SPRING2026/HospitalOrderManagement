@@ -32,7 +32,7 @@ class OrderManagerTest {
 
     private OrderManager orderManager;
 
-    // ── helper — builds SubmitOrderCommand with all deps ─────────────
+    // ── helpers ───────────────────────────────────────────────────────
     private SubmitOrderCommand submitCmd(OrderType type,
                                          String patient,
                                          String clinician,
@@ -45,7 +45,6 @@ class OrderManagerTest {
         );
     }
 
-    // ── helper — builds ClaimOrderCommand with all deps ───────────────
     private ClaimOrderCommand claimCmd(String orderId,
                                        String claimedBy) {
         return new ClaimOrderCommand(
@@ -54,7 +53,6 @@ class OrderManagerTest {
         );
     }
 
-    // ── helper — builds CompleteOrderCommand with all deps ────────────
     private CompleteOrderCommand completeCmd(String orderId,
                                              String actor) {
         return new CompleteOrderCommand(
@@ -63,7 +61,6 @@ class OrderManagerTest {
         );
     }
 
-    // ── helper — builds CancelOrderCommand with all deps ──────────────
     private CancelOrderCommand cancelCmd(String orderId,
                                          String actor) {
         return new CancelOrderCommand(
@@ -146,10 +143,12 @@ class OrderManagerTest {
         // Act
         orderManager.handle(cmd);
 
-        // Assert
-        verify(commandLog).record(eq("SUBMIT"),
+        // Assert — updated to match new record() signature
+        verify(commandLog).record(
+                eq("SUBMIT"),
                 anyString(),
-                eq("Dr. Jones"));
+                eq("Dr. Jones"),
+                any(Command.class));
     }
 
     // ── Claim Order ───────────────────────────────────────────────────
@@ -239,7 +238,6 @@ class OrderManagerTest {
                 OrderType.LAB, "John Smith",
                 "Dr. Jones", "Blood test", Priority.ROUTINE));
 
-        // order is PENDING not IN_PROGRESS
         when(orderAccess.findOrderById(order.getId()))
                 .thenReturn(Optional.of(order));
 

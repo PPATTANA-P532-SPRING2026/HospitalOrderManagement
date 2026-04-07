@@ -9,11 +9,11 @@ import java.util.List;
 
 public class ClaimOrderCommand implements Command {
 
-    // ── data ──────────────────────────────────────────────────────────
+    // ── data
     private final String orderId;
     private final String claimedBy;
 
-    // ── dependencies ──────────────────────────────────────────────────
+    // ── dependencies
     private final OrderAccess orderAccess;
     private final List<NotificationService> observers;
 

@@ -13,7 +13,7 @@ public class OrderStore {
     // raw in-memory storage — just a list
     private final List<Order> orders = new ArrayList<>();
 
-    // ── raw operations — no business logic ───────────────────────────
+    // ── raw operations — no business logic
     public void add(Order order) {
         orders.add(order);
     }

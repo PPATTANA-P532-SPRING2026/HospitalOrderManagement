@@ -18,11 +18,12 @@ class NotificationServiceTest {
     private static class MockNotificationService
             implements NotificationService {
 
-        List<String> events  = new ArrayList<>();
-        List<Order>  orders  = new ArrayList<>();
+        List<String> events = new ArrayList<>();
+        List<Order>  orders = new ArrayList<>();
 
         @Override
-        public void onOrderStatusChanged(Order order, String event) {
+        public void onOrderStatusChanged(Order order,
+                                         String event) {
             events.add(event);
             orders.add(order);
         }
@@ -43,6 +44,8 @@ class NotificationServiceTest {
                 Priority.URGENT
         );
     }
+
+    // ── existing tests ────────────────────────────────────────────────
 
     @Test
     void notify_captures_submitted_event() {
@@ -91,9 +94,9 @@ class NotificationServiceTest {
 
         // Assert
         assertEquals(3, mockNotifier.events.size());
-        assertEquals("SUBMITTED",  mockNotifier.events.get(0));
-        assertEquals("CLAIMED",    mockNotifier.events.get(1));
-        assertEquals("COMPLETED",  mockNotifier.events.get(2));
+        assertEquals("SUBMITTED", mockNotifier.events.get(0));
+        assertEquals("CLAIMED",   mockNotifier.events.get(1));
+        assertEquals("COMPLETED", mockNotifier.events.get(2));
     }
 
     @Test
@@ -104,23 +107,138 @@ class NotificationServiceTest {
 
         // Act + Assert
         assertDoesNotThrow(() ->
-                console.onOrderStatusChanged(testOrder, "SUBMITTED"));
+                console.onOrderStatusChanged(
+                        testOrder, "SUBMITTED"));
     }
+
+    // ── Week 2 — InAppAlertService tests ─────────────────────────────
+
+    @Test
+    void inapp_badge_increments_on_notify() {
+        // Arrange
+        InAppAlertService inApp = new InAppAlertService();
+
+        // Act
+        inApp.onOrderStatusChanged(testOrder, "SUBMITTED");
+
+        // Assert
+        assertEquals(1, inApp.getBadgeCount());
+    }
+
+    @Test
+    void inapp_badge_increments_multiple_times() {
+        // Arrange
+        InAppAlertService inApp = new InAppAlertService();
+
+        // Act
+        inApp.onOrderStatusChanged(testOrder, "SUBMITTED");
+        inApp.onOrderStatusChanged(testOrder, "CLAIMED");
+        inApp.onOrderStatusChanged(testOrder, "COMPLETED");
+
+        // Assert
+        assertEquals(3, inApp.getBadgeCount());
+    }
+
+    @Test
+    void inapp_badge_resets_to_zero() {
+        // Arrange
+        InAppAlertService inApp = new InAppAlertService();
+        inApp.onOrderStatusChanged(testOrder, "SUBMITTED");
+        inApp.onOrderStatusChanged(testOrder, "CLAIMED");
+        assertEquals(2, inApp.getBadgeCount());
+
+        // Act
+        inApp.resetBadgeCount();
+
+        // Assert
+        assertEquals(0, inApp.getBadgeCount());
+    }
+
+    @Test
+    void inapp_starts_at_zero() {
+        // Arrange
+        InAppAlertService inApp = new InAppAlertService();
+
+        // Assert
+        assertEquals(0, inApp.getBadgeCount());
+    }
+
+    // ── Week 2 — EmailNotificationService tests ───────────────────────
+
+    @Test
+    void email_notifier_does_not_throw() {
+        // Arrange
+        EmailNotificationService email =
+                new EmailNotificationService();
+
+        // Act + Assert
+        assertDoesNotThrow(() ->
+                email.onOrderStatusChanged(
+                        testOrder, "SUBMITTED"));
+    }
+
+    @Test
+    void email_notifier_handles_all_events() {
+        // Arrange
+        EmailNotificationService email =
+                new EmailNotificationService();
+
+        // Act + Assert — none of these should throw
+        assertDoesNotThrow(() -> {
+            email.onOrderStatusChanged(testOrder, "SUBMITTED");
+            email.onOrderStatusChanged(testOrder, "CLAIMED");
+            email.onOrderStatusChanged(testOrder, "COMPLETED");
+            email.onOrderStatusChanged(testOrder, "CANCELLED");
+        });
+    }
+
+    // ── Week 2 — multiple observers fire ─────────────────────────────
 
     @Test
     void multiple_observers_all_receive_event() {
         // Arrange
-        MockNotificationService observer1 = new MockNotificationService();
-        MockNotificationService observer2 = new MockNotificationService();
+        MockNotificationService observer1 =
+                new MockNotificationService();
+        MockNotificationService observer2 =
+                new MockNotificationService();
+        InAppAlertService inApp = new InAppAlertService();
 
-        // Act
-        observer1.onOrderStatusChanged(testOrder, "SUBMITTED");
-        observer2.onOrderStatusChanged(testOrder, "SUBMITTED");
+        List<NotificationService> observers =
+                List.of(observer1, observer2, inApp);
 
-        // Assert — both observers received the event
+        // Act — simulate notifyObservers()
+        observers.forEach(o ->
+                o.onOrderStatusChanged(testOrder, "SUBMITTED"));
+
+        // Assert — all observers received event
         assertEquals(1, observer1.events.size());
         assertEquals(1, observer2.events.size());
+        assertEquals(1, inApp.getBadgeCount());
         assertEquals("SUBMITTED", observer1.events.get(0));
         assertEquals("SUBMITTED", observer2.events.get(0));
+    }
+
+    @Test
+    void observer_list_fires_in_order() {
+        // Arrange
+        List<String> fireOrder = new ArrayList<>();
+
+        NotificationService first = (order, event) ->
+                fireOrder.add("first");
+        NotificationService second = (order, event) ->
+                fireOrder.add("second");
+        NotificationService third = (order, event) ->
+                fireOrder.add("third");
+
+        List<NotificationService> observers =
+                List.of(first, second, third);
+
+        // Act
+        observers.forEach(o ->
+                o.onOrderStatusChanged(testOrder, "SUBMITTED"));
+
+        // Assert
+        assertEquals(List.of("first", "second", "third"),
+                fireOrder);
     }
 }

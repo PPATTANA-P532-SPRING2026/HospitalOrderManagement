@@ -9,11 +9,11 @@ import java.util.List;
 
 public class CancelOrderCommand implements Command {
 
-    // ── data ──────────────────────────────────────────────────────────
+    // ── data
     private final String orderId;
     private final String actor;
 
-    // ── dependencies ──────────────────────────────────────────────────
+    // ── dependencies
     private final OrderAccess orderAccess;
     private final List<NotificationService> observers;
 

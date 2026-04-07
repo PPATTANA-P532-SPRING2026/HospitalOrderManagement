@@ -2,9 +2,14 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, week-2-changes ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, week-2-changes ]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
 
@@ -38,18 +43,28 @@ jobs:
       - name: Build Docker image
         run: docker build -t hospitalmanagementsystem .
 
-  deploy:
+  # ── Deploy main backend ───────────────────────────────────────────
+  deploy-main:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Trigger Render deploy
+      - name: Trigger Render deploy (main)
         run: |
           curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
 
+  # ── Deploy week-2-changes backend ────────────────────────────────
+  deploy-week2:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/week-2-changes'
+    steps:
+      - name: Trigger Render deploy (week-2-changes)
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_WEEK2 }}
 
-
-  deploy-frontend:
+  # ── Deploy main frontend to GitHub Pages ─────────────────────────
+  deploy-frontend-main:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -62,12 +77,32 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./src/main/resources/static
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
+  # ── Deploy week-2-changes frontend to GitHub Pages ───────────────
+  deploy-frontend-week2:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/week-2-changes'
+    environment:
+      name: github-pages-week2
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./src/main/resources/static
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
