@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main, week-2-changes ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, week-2-changes ]
+    branches: [ main ]
 
 permissions:
   contents: write
@@ -12,7 +12,6 @@ permissions:
   id-token: write
 
 jobs:
-
   test:
     runs-on: ubuntu-latest
     steps:
@@ -43,7 +42,6 @@ jobs:
       - name: Build Docker image
         run: docker build -t hospitalmanagementsystem .
 
-  # ── Deploy main backend ───────────────────────────────────────────
   deploy-main:
     needs: build
     runs-on: ubuntu-latest
@@ -53,17 +51,6 @@ jobs:
         run: |
           curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
 
-  # ── Deploy week-2-changes backend ────────────────────────────────
-  deploy-week2:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/week-2-changes'
-    steps:
-      - name: Trigger Render deploy (week-2-changes)
-        run: |
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_WEEK2 }}
-
-  # ── Deploy main frontend ──────────────────────────────────────────
   deploy-frontend-main:
     needs: test
     runs-on: ubuntu-latest
@@ -80,35 +67,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          name: github-pages
           path: ./src/main/resources/static
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          artifact_name: github-pages
-
-  # ── Deploy week-2-changes frontend ───────────────────────────────
-  deploy-frontend-week2:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/week-2-changes'
-    environment:
-      name: github-pages-week2
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          name: github-pages-week2
-          path: ./src/main/resources/static
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          artifact_name: github-pages-week2
