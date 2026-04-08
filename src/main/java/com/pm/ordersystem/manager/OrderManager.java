@@ -2,6 +2,8 @@ package com.pm.ordersystem.manager;
 
 import com.pm.ordersystem.access.OrderAccess;
 import com.pm.ordersystem.command.*;
+import com.pm.ordersystem.engine.LoadBalancingStrategy;
+import com.pm.ordersystem.engine.TriageStrategy;
 import com.pm.ordersystem.engine.TriagingEngine;
 import com.pm.ordersystem.handler.OrderHandler;
 import com.pm.ordersystem.model.enums.OrderStatus;
@@ -33,7 +35,7 @@ public class OrderManager {
         this.observers      = new ArrayList<>(observers);
     }
 
-    // ── Observer registration
+    // ── Observer registration ─────────────────────────────────────────
     public void register(NotificationService observer) {
         observers.add(observer);
     }
@@ -42,22 +44,44 @@ public class OrderManager {
         observers.clear();
     }
 
-    // ── handle — calls execute() and records
+    // ── Notify helpers ────────────────────────────────────────────────
+    private void notifyClinician(Order order, String event) {
+        for (NotificationService observer : observers) {
+            observer.notifyClinician(
+                    order.getClinician(), order, event);
+        }
+    }
+
+    private void notifyStaff(Order order, String event) {
+        if (order.getClaimedBy() != null) {
+            for (NotificationService observer : observers) {
+                observer.notifyStaff(
+                        order.getClaimedBy(), order, event);
+            }
+        }
+    }
+
+    // ── Submit — notify clinician only ────────────────────────────────
     public Order handle(SubmitOrderCommand cmd) {
         cmd.execute();
+        notifyClinician(cmd.getCreatedOrder(), "SUBMITTED");
         commandLog.record("SUBMIT",
                 cmd.getCreatedOrder().getId(),
                 cmd.getClinician(), cmd);
         return cmd.getCreatedOrder();
     }
 
+    // ── Claim — notify clinician + staff ──────────────────────────────
     public Order handle(ClaimOrderCommand cmd) {
         cmd.execute();
         Order order = orderAccess
                 .findOrderById(cmd.getOrderId())
                 .orElseThrow();
+        notifyClinician(order, "CLAIMED");
+        notifyStaff(order, "CLAIMED");
         commandLog.record("CLAIM", cmd.getOrderId(),
                 cmd.getClaimedBy(), cmd);
+        rebalanceIfNeeded();   // ← reassign remaining pending
         return order;
     }
 
@@ -66,8 +90,11 @@ public class OrderManager {
         Order order = orderAccess
                 .findOrderById(cmd.getOrderId())
                 .orElseThrow();
+        notifyClinician(order, "COMPLETED");
+        notifyStaff(order, "COMPLETED");
         commandLog.record("COMPLETE", cmd.getOrderId(),
                 cmd.getActor(), cmd);
+        rebalanceIfNeeded();   // ← reassign remaining pending
         return order;
     }
 
@@ -76,12 +103,25 @@ public class OrderManager {
         Order order = orderAccess
                 .findOrderById(cmd.getOrderId())
                 .orElseThrow();
+        notifyClinician(order, "CANCELLED");
         commandLog.record("CANCEL", cmd.getOrderId(),
                 cmd.getActor(), cmd);
+        rebalanceIfNeeded();   // ← reassign remaining pending
         return order;
     }
 
-    // ── Undo last command
+    // ── rebalance load balancing after every state change ─────────────
+    private void rebalanceIfNeeded() {
+        if (triagingEngine.getStrategy()
+                instanceof LoadBalancingStrategy lbs) {
+            List<Order> pending = orderAccess.listPendingOrders();
+            if (!pending.isEmpty()) {
+                lbs.rebalance(pending);
+            }
+        }
+    }
+
+    // ── Undo last command ─────────────────────────────────────────────
     public void undoLast() {
         CommandLogEntry last = commandLog.getLastEntry()
                 .orElseThrow(() -> new IllegalStateException(
@@ -118,16 +158,14 @@ public class OrderManager {
         commandLog.removeLastEntry();
     }
 
-    // ── Replay a command
+    // ── Replay a command ──────────────────────────────────────────────
     public Order replay(String entryId) {
         CommandLogEntry entry = commandLog.findById(entryId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Audit entry not found: " + entryId));
 
-        // re-execute the stored command
         entry.getCommand().execute();
 
-        // record the replay as a new entry
         commandLog.record(
                 entry.getCommandType(),
                 entry.getOrderId(),
@@ -139,7 +177,7 @@ public class OrderManager {
                 .orElseThrow();
     }
 
-    // ── Query methods
+    // ── Query methods ─────────────────────────────────────────────────
     public List<Order> getPendingOrders() {
         return orderAccess.listPendingOrders();
     }

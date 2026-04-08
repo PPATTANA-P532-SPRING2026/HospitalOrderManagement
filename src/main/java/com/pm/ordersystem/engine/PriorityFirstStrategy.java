@@ -14,19 +14,21 @@ public class PriorityFirstStrategy implements TriageStrategy {
     @Override
     public List<Order> insertIntoQueue(Order order,
                                        List<Order> currentQueue) {
-        // add the new order to the queue
+        // add new order to full queue
         List<Order> queue = new ArrayList<>(currentQueue);
         queue.add(order);
 
-        // sort by priority first then by timestamp for ties
+        // sort entire queue:
+        // STAT first, URGENT second, ROUTINE last
+        // ties broken by timestamp ascending (FIFO)
         queue.sort(Comparator
-                .comparingInt(this::priorityValue).reversed()
+                .comparingInt(this::priorityValue)
+                .reversed()
                 .thenComparing(Order::getTimestamp));
 
         return queue;
     }
 
-    // ── STAT = 2, URGENT = 1, ROUTINE = 0
     private int priorityValue(Order order) {
         return switch (order.getPriority()) {
             case STAT    -> 2;

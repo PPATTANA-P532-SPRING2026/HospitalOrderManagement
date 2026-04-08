@@ -1,6 +1,7 @@
 package com.pm.ordersystem.client;
 
 import com.pm.ordersystem.access.OrderAccess;
+import com.pm.ordersystem.access.StaffAccess;
 import com.pm.ordersystem.command.ClaimOrderCommand;
 import com.pm.ordersystem.command.CompleteOrderCommand;
 import com.pm.ordersystem.manager.OrderManager;
@@ -18,13 +19,16 @@ public class FulfilmentController {
 
     private final OrderManager orderManager;
     private final OrderAccess orderAccess;
+    private final StaffAccess staffAccess;
     private final List<NotificationService> observers;
 
     public FulfilmentController(OrderManager orderManager,
                                 OrderAccess orderAccess,
+                                StaffAccess staffAccess,
                                 List<NotificationService> observers) {
         this.orderManager = orderManager;
         this.orderAccess  = orderAccess;
+        this.staffAccess  = staffAccess;
         this.observers    = observers;
     }
 
@@ -37,6 +41,7 @@ public class FulfilmentController {
                     id,
                     body.get("claimedBy"),
                     orderAccess,
+                    staffAccess,
                     observers
             );
             Order order = orderManager.handle(cmd);
@@ -44,7 +49,8 @@ public class FulfilmentController {
 
         } catch (IllegalArgumentException |
                  IllegalStateException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(e.getMessage());
         }
     }
 
@@ -57,6 +63,7 @@ public class FulfilmentController {
                     id,
                     body.get("actor"),
                     orderAccess,
+                    staffAccess,
                     observers
             );
             Order order = orderManager.handle(cmd);
@@ -64,7 +71,8 @@ public class FulfilmentController {
 
         } catch (IllegalArgumentException |
                  IllegalStateException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(e.getMessage());
         }
     }
 }

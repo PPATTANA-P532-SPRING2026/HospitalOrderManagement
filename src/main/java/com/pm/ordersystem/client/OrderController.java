@@ -1,5 +1,6 @@
 package com.pm.ordersystem.client;
 
+import com.pm.ordersystem.access.ClinicianAccess;
 import com.pm.ordersystem.access.OrderAccess;
 import com.pm.ordersystem.command.CancelOrderCommand;
 import com.pm.ordersystem.command.SubmitOrderCommand;
@@ -24,18 +25,21 @@ public class OrderController {
     private final OrderAccess orderAccess;
     private final OrderHandler orderHandler;
     private final TriagingEngine triagingEngine;
+    private final ClinicianAccess clinicianAccess;
     private final List<NotificationService> observers;
 
     public OrderController(OrderManager orderManager,
                            OrderAccess orderAccess,
                            OrderHandler orderHandler,
                            TriagingEngine triagingEngine,
+                           ClinicianAccess clinicianAccess,
                            List<NotificationService> observers) {
-        this.orderManager   = orderManager;
-        this.orderAccess    = orderAccess;
-        this.orderHandler   = orderHandler;
-        this.triagingEngine = triagingEngine;
-        this.observers      = observers;
+        this.orderManager    = orderManager;
+        this.orderAccess     = orderAccess;
+        this.orderHandler    = orderHandler;
+        this.triagingEngine  = triagingEngine;
+        this.clinicianAccess = clinicianAccess;
+        this.observers       = observers;
     }
 
     @GetMapping
@@ -57,6 +61,16 @@ public class OrderController {
     public ResponseEntity<?> submitOrder(
             @RequestBody Map<String, String> body) {
         try {
+            String clinicianName = body.get("clinician");
+
+            // validate clinician is registered
+            if (!clinicianAccess.exists(clinicianName)) {
+                return ResponseEntity.badRequest()
+                        .body("Clinician not registered: "
+                                + clinicianName
+                                + ". Please register first.");
+            }
+
             OrderType type    = OrderType.valueOf(
                     body.get("type").toUpperCase());
             Priority priority = Priority.valueOf(
@@ -65,7 +79,7 @@ public class OrderController {
             SubmitOrderCommand cmd = new SubmitOrderCommand(
                     type,
                     body.get("patientName"),
-                    body.get("clinician"),
+                    clinicianName,
                     body.get("description"),
                     priority,
                     orderAccess,
@@ -78,7 +92,8 @@ public class OrderController {
             return ResponseEntity.ok(order);
 
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(e.getMessage());
         }
     }
 
@@ -91,6 +106,7 @@ public class OrderController {
                     id,
                     body.get("actor"),
                     orderAccess,
+                    clinicianAccess,
                     observers
             );
             Order order = orderManager.handle(cmd);
@@ -98,7 +114,8 @@ public class OrderController {
 
         } catch (IllegalArgumentException |
                  IllegalStateException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(e.getMessage());
         }
     }
 }

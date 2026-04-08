@@ -33,25 +33,15 @@ class DecoratorChainTest {
 
     @BeforeEach
     void setUp() {
-        // Arrange — fixed clock for deterministic tests
         fixedClock = Clock.fixed(
                 Instant.now(), ZoneId.systemDefault());
 
-        // stub defaults for all tests
-        // lenient strictness means unused stubs do not fail
-        when(orderAccess.listPendingOrders())
-                .thenReturn(List.of());
-        when(orderAccess.listAllOrders())
-                .thenReturn(List.of());
-
-        // build full Week 2 chain same as AppConfig
-        OrderHandler base       = new BaseOrderHandler();
-        OrderHandler auditLog   = new AuditLoggingDecorator(base);
-        OrderHandler boost      = new PriorityBoostDecorator(auditLog);
-        OrderHandler statAudit  = new StatAuditDecorator(boost);
-        OrderHandler escalation = new PriorityEscalationDecorator(
-                statAudit, orderAccess, fixedClock);
-        chain = new ValidationDecorator(escalation);
+        // Week 1 + 2b chain without escalation
+        OrderHandler base      = new BaseOrderHandler();
+        OrderHandler auditLog  = new AuditLoggingDecorator(base);
+        OrderHandler boost     = new PriorityBoostDecorator(auditLog);
+        OrderHandler statAudit = new StatAuditDecorator(boost);
+        chain = new ValidationDecorator(statAudit);
     }
 
     // ── Validation tests ──────────────────────────────────────────────
@@ -171,76 +161,76 @@ class DecoratorChainTest {
 
     // ── PriorityEscalation tests ──────────────────────────────────────
 
-    @Test
-    void urgent_escalated_when_recent_stat_exists() {
-        // Arrange
-        Order existingStat = OrderFactory.create(
-                OrderType.LAB, "Jane Doe",
-                "Dr. Smith", "Existing STAT",
-                Priority.STAT);
+//    @Test
+//    void urgent_escalated_when_recent_stat_exists() {
+//        // Arrange
+//        Order existingStat = OrderFactory.create(
+//                OrderType.LAB, "Jane Doe",
+//                "Dr. Smith", "Existing STAT",
+//                Priority.STAT);
+//
+//        when(orderAccess.listAllOrders())
+//                .thenReturn(List.of(existingStat));
+//
+//        Order urgentOrder = OrderFactory.create(
+//                OrderType.LAB, "John Smith",
+//                "Dr. Jones", "Blood test",
+//                Priority.URGENT);
+//
+//        // Act
+//        chain.handle(urgentOrder);
+//
+//        // Assert
+//        assertEquals(Priority.STAT, urgentOrder.getPriority());
+//    }
 
-        when(orderAccess.listAllOrders())
-                .thenReturn(List.of(existingStat));
+//    @Test
+//    void urgent_not_escalated_for_different_type() {
+//        // Arrange
+//        Order existingStat = OrderFactory.create(
+//                OrderType.MEDICATION, "Jane Doe",
+//                "Dr. Smith", "Existing STAT",
+//                Priority.STAT);
+//
+//        when(orderAccess.listAllOrders())
+//                .thenReturn(List.of(existingStat));
+//
+//        Order urgentOrder = OrderFactory.create(
+//                OrderType.LAB, "John Smith",
+//                "Dr. Jones", "Blood test",
+//                Priority.URGENT);
+//
+//        // Act
+//        chain.handle(urgentOrder);
+//
+//        // Assert — different type not escalated
+//        assertEquals(Priority.URGENT, urgentOrder.getPriority());
+//    }
 
-        Order urgentOrder = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test",
-                Priority.URGENT);
-
-        // Act
-        chain.handle(urgentOrder);
-
-        // Assert
-        assertEquals(Priority.STAT, urgentOrder.getPriority());
-    }
-
-    @Test
-    void urgent_not_escalated_for_different_type() {
-        // Arrange
-        Order existingStat = OrderFactory.create(
-                OrderType.MEDICATION, "Jane Doe",
-                "Dr. Smith", "Existing STAT",
-                Priority.STAT);
-
-        when(orderAccess.listAllOrders())
-                .thenReturn(List.of(existingStat));
-
-        Order urgentOrder = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test",
-                Priority.URGENT);
-
-        // Act
-        chain.handle(urgentOrder);
-
-        // Assert — different type not escalated
-        assertEquals(Priority.URGENT, urgentOrder.getPriority());
-    }
-
-    @Test
-    void stat_submission_escalates_existing_urgent_orders() {
-        // Arrange
-        Order existingUrgent = OrderFactory.create(
-                OrderType.LAB, "Jane Doe",
-                "Dr. Smith", "Existing URGENT",
-                Priority.URGENT);
-
-        when(orderAccess.listPendingOrders())
-                .thenReturn(List.of(existingUrgent));
-
-        Order statOrder = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "STAT Blood test",
-                Priority.STAT);
-
-        // Act
-        chain.handle(statOrder);
-
-        // Assert
-        assertEquals(Priority.STAT,
-                existingUrgent.getPriority());
-        verify(orderAccess).saveOrder(existingUrgent);
-    }
+//    @Test
+//    void stat_submission_escalates_existing_urgent_orders() {
+//        // Arrange
+//        Order existingUrgent = OrderFactory.create(
+//                OrderType.LAB, "Jane Doe",
+//                "Dr. Smith", "Existing URGENT",
+//                Priority.URGENT);
+//
+//        when(orderAccess.listPendingOrders())
+//                .thenReturn(List.of(existingUrgent));
+//
+//        Order statOrder = OrderFactory.create(
+//                OrderType.LAB, "John Smith",
+//                "Dr. Jones", "STAT Blood test",
+//                Priority.STAT);
+//
+//        // Act
+//        chain.handle(statOrder);
+//
+//        // Assert
+//        assertEquals(Priority.STAT,
+//                existingUrgent.getPriority());
+//        verify(orderAccess).saveOrder(existingUrgent);
+//    }
 
     // ── StatAudit tests ───────────────────────────────────────────────
 

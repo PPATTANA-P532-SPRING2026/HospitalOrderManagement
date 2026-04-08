@@ -44,8 +44,6 @@ public class AppConfig {
         chain = new AuditLoggingDecorator(chain);
         chain = new PriorityBoostDecorator(chain);
         chain = new StatAuditDecorator(chain);
-        chain = new PriorityEscalationDecorator(
-                chain, orderAccess, clock);
         chain = new ValidationDecorator(chain);
         return chain;
     }

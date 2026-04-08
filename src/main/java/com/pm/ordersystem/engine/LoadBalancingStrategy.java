@@ -7,9 +7,9 @@ import com.pm.ordersystem.model.staff.StaffMember;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Component
 public class LoadBalancingStrategy implements TriageStrategy {
@@ -28,42 +28,81 @@ public class LoadBalancingStrategy implements TriageStrategy {
                                        List<Order> currentQueue) {
         List<StaffMember> allStaff = staffAccess.listAllStaff();
 
-        // if no staff registered fall back to simple queue
-        if (allStaff.isEmpty()) {
-            List<Order> queue = new ArrayList<>(currentQueue);
-            queue.add(order);
-            return queue;
+        if (!allStaff.isEmpty()) {
+            Map<String, Long> loadMap = new HashMap<>();
+
+            // initialise all staff at 0
+            allStaff.forEach(s ->
+                    loadMap.put(s.getName(), 0L));
+
+            // count IN_PROGRESS orders only (per spec)
+            orderAccess.listInProgressOrders()
+                    .stream()
+                    .filter(o -> o.getClaimedBy() != null)
+                    .forEach(o -> loadMap.merge(
+                            o.getClaimedBy(), 1L, Long::sum));
+
+            // find least loaded
+            StaffMember leastLoaded = allStaff.stream()
+                    .min((a, b) -> Long.compare(
+                            loadMap.get(a.getName()),
+                            loadMap.get(b.getName())))
+                    .orElse(null);
+
+            if (leastLoaded != null) {
+                order.setClaimedBy(leastLoaded.getName());
+                System.out.println("[LOAD BALANCING] Assigned "
+                        + order.getId()
+                        + " → " + leastLoaded.getName());
+            }
         }
 
-        // count IN_PROGRESS orders per staff member
-        Map<String, Long> loadMap = orderAccess
-                .listInProgressOrders()
-                .stream()
-                .filter(o -> o.getClaimedBy() != null)
-                .collect(Collectors.groupingBy(
-                        Order::getClaimedBy,
-                        Collectors.counting()));
-
-        // find staff member with fewest in-progress orders
-        // start all staff at 0 so new staff are considered
-        StaffMember leastLoaded = allStaff.stream()
-                .min((a, b) -> {
-                    long loadA = loadMap.getOrDefault(
-                            a.getName(), 0L);
-                    long loadB = loadMap.getOrDefault(
-                            b.getName(), 0L);
-                    return Long.compare(loadA, loadB);
-                })
-                .orElse(null);
-
-        // assign to least loaded staff member
-        if (leastLoaded != null) {
-            order.setClaimedBy(leastLoaded.getName());
-        }
-
-        // add to queue
         List<Order> queue = new ArrayList<>(currentQueue);
         queue.add(order);
         return queue;
+    }
+
+    public void rebalance(List<Order> pendingOrders) {
+        List<StaffMember> allStaff = staffAccess.listAllStaff();
+        if (allStaff.isEmpty()) return;
+
+        // reset all pending assignments
+        pendingOrders.forEach(o -> o.setClaimedBy(null));
+
+        // reassign each order one by one
+        for (Order o : pendingOrders) {
+            Map<String, Long> loadMap = new HashMap<>();
+
+            // initialise all at 0
+            allStaff.forEach(s ->
+                    loadMap.put(s.getName(), 0L));
+
+            // count IN_PROGRESS
+            orderAccess.listInProgressOrders()
+                    .stream()
+                    .filter(p -> p.getClaimedBy() != null)
+                    .forEach(p -> loadMap.merge(
+                            p.getClaimedBy(), 1L, Long::sum));
+
+            // count already assigned in this batch
+            pendingOrders.stream()
+                    .filter(p -> p.getClaimedBy() != null)
+                    .forEach(p -> loadMap.merge(
+                            p.getClaimedBy(), 1L, Long::sum));
+
+            StaffMember leastLoaded = allStaff.stream()
+                    .min((a, b) -> Long.compare(
+                            loadMap.get(a.getName()),
+                            loadMap.get(b.getName())))
+                    .orElse(null);
+
+            if (leastLoaded != null) {
+                o.setClaimedBy(leastLoaded.getName());
+                orderAccess.saveOrder(o);
+                System.out.println("[LOAD BALANCING] Rebalanced "
+                        + o.getId()
+                        + " → " + leastLoaded.getName());
+            }
+        }
     }
 }

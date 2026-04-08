@@ -8,23 +8,39 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Component
 public class InAppAlertService implements NotificationService {
 
-    // thread-safe — scheduler + HTTP threads access concurrently
-    private final AtomicInteger badgeCount = new AtomicInteger(0);
+    private final AtomicInteger badgeCount =
+            new AtomicInteger(0);
 
     @Override
     public void onOrderStatusChanged(Order order, String event) {
         int count = badgeCount.incrementAndGet();
         System.out.println("[IN-APP] Badge count: " + count
                 + " | event="   + event
-                + " | orderId=" + order.getId()
-                + " | patient=" + order.getPatientName());
+                + " | orderId=" + order.getId());
     }
 
-    public int getBadgeCount() {
-        return badgeCount.get();
+    @Override
+    public void notifyClinician(String clinicianName,
+                                Order order, String event) {
+        int count = badgeCount.incrementAndGet();
+        System.out.println("[IN-APP → CLINICIAN] "
+                + clinicianName
+                + " | Badge: " + count
+                + " | event="  + event
+                + " | order="  + order.getId());
     }
 
-    public void resetBadgeCount() {
-        badgeCount.set(0);
+    @Override
+    public void notifyStaff(String staffName,
+                            Order order, String event) {
+        int count = badgeCount.incrementAndGet();
+        System.out.println("[IN-APP → STAFF] "
+                + staffName
+                + " | Badge: " + count
+                + " | event="  + event
+                + " | order="  + order.getId());
     }
+
+    public int getBadgeCount()  { return badgeCount.get(); }
+    public void resetBadgeCount() { badgeCount.set(0); }
 }

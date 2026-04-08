@@ -14,17 +14,39 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class NotificationServiceTest {
 
-    // ── mock that captures messages ───────────────────────────────────
+    // ── mock that captures all notifications ──────────────────────────
     private static class MockNotificationService
             implements NotificationService {
 
-        List<String> events = new ArrayList<>();
-        List<Order>  orders = new ArrayList<>();
+        List<String> events          = new ArrayList<>();
+        List<String> clinicianEvents = new ArrayList<>();
+        List<String> staffEvents     = new ArrayList<>();
+        List<String> clinicianNames  = new ArrayList<>();
+        List<String> staffNames      = new ArrayList<>();
+        List<Order>  orders          = new ArrayList<>();
 
         @Override
         public void onOrderStatusChanged(Order order,
                                          String event) {
             events.add(event);
+            orders.add(order);
+        }
+
+        @Override
+        public void notifyClinician(String clinicianName,
+                                    Order order,
+                                    String event) {
+            clinicianEvents.add(event);
+            clinicianNames.add(clinicianName);
+            orders.add(order);
+        }
+
+        @Override
+        public void notifyStaff(String staffName,
+                                Order order,
+                                String event) {
+            staffEvents.add(event);
+            staffNames.add(staffName);
             orders.add(order);
         }
     }
@@ -45,7 +67,7 @@ class NotificationServiceTest {
         );
     }
 
-    // ── existing tests ────────────────────────────────────────────────
+    // ── onOrderStatusChanged tests ────────────────────────────────────
 
     @Test
     void notify_captures_submitted_event() {
@@ -99,8 +121,176 @@ class NotificationServiceTest {
         assertEquals("COMPLETED", mockNotifier.events.get(2));
     }
 
+    // ── notifyClinician tests ─────────────────────────────────────────
+
     @Test
-    void console_notifier_does_not_throw() {
+    void notify_clinician_captures_event_and_name() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "SUBMITTED");
+
+        // Assert
+        assertEquals(1, mockNotifier.clinicianEvents.size());
+        assertEquals("SUBMITTED",
+                mockNotifier.clinicianEvents.get(0));
+        assertEquals("Dr. Jones",
+                mockNotifier.clinicianNames.get(0));
+    }
+
+    @Test
+    void notify_clinician_on_submitted() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "SUBMITTED");
+
+        // Assert
+        assertEquals("SUBMITTED",
+                mockNotifier.clinicianEvents.get(0));
+        assertEquals("Dr. Jones",
+                mockNotifier.clinicianNames.get(0));
+    }
+
+    @Test
+    void notify_clinician_on_claimed() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "CLAIMED");
+
+        // Assert
+        assertEquals("CLAIMED",
+                mockNotifier.clinicianEvents.get(0));
+    }
+
+    @Test
+    void notify_clinician_on_completed() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "COMPLETED");
+
+        // Assert
+        assertEquals("COMPLETED",
+                mockNotifier.clinicianEvents.get(0));
+    }
+
+    @Test
+    void notify_clinician_on_cancelled() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "CANCELLED");
+
+        // Assert
+        assertEquals("CANCELLED",
+                mockNotifier.clinicianEvents.get(0));
+    }
+
+    // ── notifyStaff tests ─────────────────────────────────────────────
+
+    @Test
+    void notify_staff_captures_event_and_name() {
+        // Act
+        mockNotifier.notifyStaff("Nurse Williams",
+                testOrder, "CLAIMED");
+
+        // Assert
+        assertEquals(1, mockNotifier.staffEvents.size());
+        assertEquals("CLAIMED",
+                mockNotifier.staffEvents.get(0));
+        assertEquals("Nurse Williams",
+                mockNotifier.staffNames.get(0));
+    }
+
+    @Test
+    void notify_staff_on_claimed() {
+        // Act
+        mockNotifier.notifyStaff("Nurse Williams",
+                testOrder, "CLAIMED");
+
+        // Assert
+        assertEquals("CLAIMED",
+                mockNotifier.staffEvents.get(0));
+    }
+
+    @Test
+    void notify_staff_on_completed() {
+        // Act
+        mockNotifier.notifyStaff("Nurse Williams",
+                testOrder, "COMPLETED");
+
+        // Assert
+        assertEquals("COMPLETED",
+                mockNotifier.staffEvents.get(0));
+    }
+
+    // ── role-based notification routing tests ─────────────────────────
+
+    @Test
+    void submit_notifies_clinician_only() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "SUBMITTED");
+
+        // Assert — clinician notified, staff not notified
+        assertEquals(1, mockNotifier.clinicianEvents.size());
+        assertEquals(0, mockNotifier.staffEvents.size());
+        assertEquals("SUBMITTED",
+                mockNotifier.clinicianEvents.get(0));
+    }
+
+    @Test
+    void claim_notifies_both_clinician_and_staff() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "CLAIMED");
+        mockNotifier.notifyStaff("Nurse Williams",
+                testOrder, "CLAIMED");
+
+        // Assert — both notified
+        assertEquals(1, mockNotifier.clinicianEvents.size());
+        assertEquals(1, mockNotifier.staffEvents.size());
+        assertEquals("CLAIMED",
+                mockNotifier.clinicianEvents.get(0));
+        assertEquals("CLAIMED",
+                mockNotifier.staffEvents.get(0));
+        assertEquals("Dr. Jones",
+                mockNotifier.clinicianNames.get(0));
+        assertEquals("Nurse Williams",
+                mockNotifier.staffNames.get(0));
+    }
+
+    @Test
+    void complete_notifies_both_clinician_and_staff() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "COMPLETED");
+        mockNotifier.notifyStaff("Nurse Williams",
+                testOrder, "COMPLETED");
+
+        // Assert — both notified
+        assertEquals(1, mockNotifier.clinicianEvents.size());
+        assertEquals(1, mockNotifier.staffEvents.size());
+        assertEquals("COMPLETED",
+                mockNotifier.clinicianEvents.get(0));
+        assertEquals("COMPLETED",
+                mockNotifier.staffEvents.get(0));
+    }
+
+    @Test
+    void cancel_notifies_clinician_only() {
+        // Act
+        mockNotifier.notifyClinician("Dr. Jones",
+                testOrder, "CANCELLED");
+
+        // Assert — clinician notified, staff not notified
+        assertEquals(1, mockNotifier.clinicianEvents.size());
+        assertEquals(0, mockNotifier.staffEvents.size());
+        assertEquals("CANCELLED",
+                mockNotifier.clinicianEvents.get(0));
+    }
+
+    // ── console notifier tests ────────────────────────────────────────
+
+    @Test
+    void console_notifier_does_not_throw_on_status_change() {
         // Arrange
         ConsoleNotificationService console =
                 new ConsoleNotificationService();
@@ -111,10 +301,34 @@ class NotificationServiceTest {
                         testOrder, "SUBMITTED"));
     }
 
-    // ── Week 2 — InAppAlertService tests ─────────────────────────────
+    @Test
+    void console_notifier_does_not_throw_on_clinician_notify() {
+        // Arrange
+        ConsoleNotificationService console =
+                new ConsoleNotificationService();
+
+        // Act + Assert
+        assertDoesNotThrow(() ->
+                console.notifyClinician("Dr. Jones",
+                        testOrder, "SUBMITTED"));
+    }
 
     @Test
-    void inapp_badge_increments_on_notify() {
+    void console_notifier_does_not_throw_on_staff_notify() {
+        // Arrange
+        ConsoleNotificationService console =
+                new ConsoleNotificationService();
+
+        // Act + Assert
+        assertDoesNotThrow(() ->
+                console.notifyStaff("Nurse Williams",
+                        testOrder, "CLAIMED"));
+    }
+
+    // ── InAppAlertService tests ───────────────────────────────────────
+
+    @Test
+    void inapp_badge_increments_on_status_change() {
         // Arrange
         InAppAlertService inApp = new InAppAlertService();
 
@@ -126,17 +340,29 @@ class NotificationServiceTest {
     }
 
     @Test
-    void inapp_badge_increments_multiple_times() {
+    void inapp_badge_increments_on_clinician_notify() {
         // Arrange
         InAppAlertService inApp = new InAppAlertService();
 
         // Act
-        inApp.onOrderStatusChanged(testOrder, "SUBMITTED");
-        inApp.onOrderStatusChanged(testOrder, "CLAIMED");
-        inApp.onOrderStatusChanged(testOrder, "COMPLETED");
+        inApp.notifyClinician("Dr. Jones",
+                testOrder, "SUBMITTED");
 
         // Assert
-        assertEquals(3, inApp.getBadgeCount());
+        assertEquals(1, inApp.getBadgeCount());
+    }
+
+    @Test
+    void inapp_badge_increments_on_staff_notify() {
+        // Arrange
+        InAppAlertService inApp = new InAppAlertService();
+
+        // Act
+        inApp.notifyStaff("Nurse Williams",
+                testOrder, "CLAIMED");
+
+        // Assert
+        assertEquals(1, inApp.getBadgeCount());
     }
 
     @Test
@@ -144,7 +370,8 @@ class NotificationServiceTest {
         // Arrange
         InAppAlertService inApp = new InAppAlertService();
         inApp.onOrderStatusChanged(testOrder, "SUBMITTED");
-        inApp.onOrderStatusChanged(testOrder, "CLAIMED");
+        inApp.notifyClinician("Dr. Jones",
+                testOrder, "CLAIMED");
         assertEquals(2, inApp.getBadgeCount());
 
         // Act
@@ -163,10 +390,10 @@ class NotificationServiceTest {
         assertEquals(0, inApp.getBadgeCount());
     }
 
-    // ── Week 2 — EmailNotificationService tests ───────────────────────
+    // ── EmailNotificationService tests ───────────────────────────────
 
     @Test
-    void email_notifier_does_not_throw() {
+    void email_does_not_throw_on_status_change() {
         // Arrange
         EmailNotificationService email =
                 new EmailNotificationService();
@@ -178,24 +405,33 @@ class NotificationServiceTest {
     }
 
     @Test
-    void email_notifier_handles_all_events() {
+    void email_does_not_throw_on_clinician_notify() {
         // Arrange
         EmailNotificationService email =
                 new EmailNotificationService();
 
-        // Act + Assert — none of these should throw
-        assertDoesNotThrow(() -> {
-            email.onOrderStatusChanged(testOrder, "SUBMITTED");
-            email.onOrderStatusChanged(testOrder, "CLAIMED");
-            email.onOrderStatusChanged(testOrder, "COMPLETED");
-            email.onOrderStatusChanged(testOrder, "CANCELLED");
-        });
+        // Act + Assert
+        assertDoesNotThrow(() ->
+                email.notifyClinician("Dr. Jones",
+                        testOrder, "SUBMITTED"));
     }
 
-    // ── Week 2 — multiple observers fire ─────────────────────────────
+    @Test
+    void email_does_not_throw_on_staff_notify() {
+        // Arrange
+        EmailNotificationService email =
+                new EmailNotificationService();
+
+        // Act + Assert
+        assertDoesNotThrow(() ->
+                email.notifyStaff("Nurse Williams",
+                        testOrder, "CLAIMED"));
+    }
+
+    // ── multiple observers tests ──────────────────────────────────────
 
     @Test
-    void multiple_observers_all_receive_event() {
+    void multiple_observers_all_receive_clinician_event() {
         // Arrange
         MockNotificationService observer1 =
                 new MockNotificationService();
@@ -206,39 +442,41 @@ class NotificationServiceTest {
         List<NotificationService> observers =
                 List.of(observer1, observer2, inApp);
 
-        // Act — simulate notifyObservers()
+        // Act
         observers.forEach(o ->
-                o.onOrderStatusChanged(testOrder, "SUBMITTED"));
+                o.notifyClinician("Dr. Jones",
+                        testOrder, "SUBMITTED"));
 
-        // Assert — all observers received event
-        assertEquals(1, observer1.events.size());
-        assertEquals(1, observer2.events.size());
+        // Assert
+        assertEquals(1, observer1.clinicianEvents.size());
+        assertEquals(1, observer2.clinicianEvents.size());
         assertEquals(1, inApp.getBadgeCount());
-        assertEquals("SUBMITTED", observer1.events.get(0));
-        assertEquals("SUBMITTED", observer2.events.get(0));
+        assertEquals("SUBMITTED",
+                observer1.clinicianEvents.get(0));
+        assertEquals("SUBMITTED",
+                observer2.clinicianEvents.get(0));
     }
 
     @Test
-    void observer_list_fires_in_order() {
+    void multiple_observers_all_receive_staff_event() {
         // Arrange
-        List<String> fireOrder = new ArrayList<>();
-
-        NotificationService first = (order, event) ->
-                fireOrder.add("first");
-        NotificationService second = (order, event) ->
-                fireOrder.add("second");
-        NotificationService third = (order, event) ->
-                fireOrder.add("third");
+        MockNotificationService observer1 =
+                new MockNotificationService();
+        MockNotificationService observer2 =
+                new MockNotificationService();
 
         List<NotificationService> observers =
-                List.of(first, second, third);
+                List.of(observer1, observer2);
 
         // Act
         observers.forEach(o ->
-                o.onOrderStatusChanged(testOrder, "SUBMITTED"));
+                o.notifyStaff("Nurse Williams",
+                        testOrder, "CLAIMED"));
 
         // Assert
-        assertEquals(List.of("first", "second", "third"),
-                fireOrder);
+        assertEquals(1, observer1.staffEvents.size());
+        assertEquals(1, observer2.staffEvents.size());
+        assertEquals("CLAIMED", observer1.staffEvents.get(0));
+        assertEquals("CLAIMED", observer2.staffEvents.get(0));
     }
 }

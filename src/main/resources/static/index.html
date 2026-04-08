@@ -10,9 +10,46 @@
 
 <h1>Hospital Order Management System</h1>
 
+<!-- ── Clinician Registration ───────────────────────────────────── -->
+<div class="section">
+    <h2>Clinicians</h2>
+    <div class="form-group">
+        <label>Name:</label>
+        <input type="text" id="clinicianNameReg"
+               placeholder="e.g. Dr. Jones">
+    </div>
+    <div class="form-group">
+        <label>Department:</label>
+        <select id="clinicianDept">
+            <option value="EMERGENCY">Emergency</option>
+            <option value="CARDIOLOGY">Cardiology</option>
+            <option value="NEUROLOGY">Neurology</option>
+            <option value="GENERAL">General</option>
+            <option value="RADIOLOGY">Radiology</option>
+        </select>
+    </div>
+    <button onclick="registerClinician()">
+        Register Clinician
+    </button>
+    <div id="clinicianMessage"></div>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Department</th>
+        </tr>
+        </thead>
+        <tbody id="clinicianTable">
+        <tr>
+            <td colspan="2">No clinicians registered</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
 <!-- ── Staff Registration ────────────────────────────────────────── -->
 <div class="section">
-    <h2>Staff Members</h2>
+    <h2>Fulfilment Staff</h2>
     <div class="form-group">
         <label>Name:</label>
         <input type="text" id="staffNameReg"
@@ -21,11 +58,10 @@
     <div class="form-group">
         <label>Role:</label>
         <select id="staffRole">
-            <option value="DOCTOR">Doctor</option>
-            <option value="NURSE">Nurse</option>
             <option value="LAB_TECH">Lab Technician</option>
             <option value="PHARMACIST">Pharmacist</option>
             <option value="RADIOLOGIST">Radiologist</option>
+            <option value="NURSE">Nurse</option>
         </select>
     </div>
     <button onclick="registerStaff()">Register Staff</button>
@@ -48,7 +84,8 @@
     <h2>Triage Strategy</h2>
     <div class="form-group">
         <label>Algorithm:</label>
-        <select id="strategySelect" onchange="changeStrategy()">
+        <select id="strategySelect"
+                onchange="changeStrategy()">
             <option value="priorityFirst">Priority First</option>
             <option value="loadBalancing">Load Balancing</option>
             <option value="deadlineFirst">Deadline First</option>
@@ -97,7 +134,11 @@
 
 <!-- ── Submit Order ─────────────────────────────────────────────── -->
 <div class="section">
-    <h2>Submit Order</h2>
+    <h2>Submit Order
+        <span style="font-size:13px; color:#888;">
+            (Clinicians only)
+        </span>
+    </h2>
     <div class="form-group">
         <label>Order Type:</label>
         <select id="orderType">
@@ -113,8 +154,8 @@
     </div>
     <div class="form-group">
         <label>Clinician:</label>
-        <select id="clinicianSelect">
-            <option value="">-- Select Clinician --</option>
+        <select id="clinician">
+            <option value="">-- select clinician --</option>
         </select>
     </div>
     <div class="form-group">
@@ -134,14 +175,21 @@
     <div id="submitMessage"></div>
 </div>
 
-<!-- ── Claim / Complete Order ───────────────────────────────────── -->
+<!-- ── Claim / Complete ──────────────────────────────────────────── -->
+
 <div class="section">
-    <h2>Claim / Complete Order</h2>
-    <div class="form-group">
-        <label>Staff Member:</label>
-        <select id="staffSelect">
-            <option value="">-- Select Staff --</option>
-        </select>
+    <h2>Claim / Complete Order
+        <span style="font-size:13px; color:#888;">
+            (Fulfilment Staff only)
+        </span>
+    </h2>
+    <div id="staffSelectSection">
+        <div class="form-group">
+            <label>Staff Member:</label>
+            <select id="staffName">
+                <option value="">-- select staff --</option>
+            </select>
+        </div>
     </div>
     <div id="claimMessage"></div>
 </div>
@@ -161,12 +209,13 @@
             <th>Description</th>
             <th>Priority</th>
             <th>Status</th>
+            <th>Assigned To</th>
             <th>Time</th>
             <th>Actions</th>
         </tr>
         </thead>
         <tbody id="ordersTable">
-        <tr><td colspan="8">Loading...</td></tr>
+        <tr><td colspan="9">Loading...</td></tr>
         </tbody>
     </table>
 </div>
@@ -191,6 +240,7 @@
         </tbody>
     </table>
 </div>
+
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -21,6 +21,10 @@ public class TriagingEngine {
         this.strategy = strategy;
     }
 
+    public TriageStrategy getStrategy() {
+        return strategy;
+    }
+
     public String getStrategyName() {
         return strategy.getClass().getSimpleName();
     }

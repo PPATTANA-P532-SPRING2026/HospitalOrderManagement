@@ -14,7 +14,6 @@ import java.util.List;
 @Component
 public class DeadlineFirstStrategy implements TriageStrategy {
 
-    // inject Clock for testability
     private final Clock clock;
 
     public DeadlineFirstStrategy(Clock clock) {
@@ -28,19 +27,16 @@ public class DeadlineFirstStrategy implements TriageStrategy {
         queue.add(order);
 
         // sort by ascending time-to-deadline
-        // order closest to deadline goes first
         queue.sort(Comparator.comparing(this::getDeadline));
         return queue;
     }
 
-    // calculate deadline based on order type + priority
     public LocalDateTime getDeadline(Order order) {
         int minutes = deadlineMinutes(
                 order.getType(), order.getPriority());
         return order.getTimestamp().plusMinutes(minutes);
     }
 
-    // deadline table from spec
     private int deadlineMinutes(OrderType type,
                                 Priority priority) {
         return switch (priority) {
