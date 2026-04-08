@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class OrderManagerTest {
 
     @Mock private OrderAccess orderAccess;
@@ -78,6 +81,14 @@ class OrderManagerTest {
 
     @BeforeEach
     void setUp() {
+        // default stubs — lenient so unused ones do not fail
+        when(orderAccess.listPendingOrders())
+                .thenReturn(List.of());
+        when(triagingEngine.assignPosition(any(), any()))
+                .thenReturn(List.of());
+        when(triagingEngine.getStrategy())
+                .thenReturn(null);
+
         orderManager = new OrderManager(
                 orderAccess,
                 triagingEngine,
@@ -92,10 +103,6 @@ class OrderManagerTest {
     @Test
     void submit_order_creates_and_saves_order() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
-
         SubmitOrderCommand cmd = submitCmd(
                 OrderType.LAB, "John Smith",
                 "Dr. Jones", "Blood glucose test",
@@ -117,10 +124,6 @@ class OrderManagerTest {
     @Test
     void submit_order_notifies_clinician() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
-
         SubmitOrderCommand cmd = submitCmd(
                 OrderType.LAB, "John Smith",
                 "Dr. Jones", "Blood glucose test",
@@ -139,10 +142,6 @@ class OrderManagerTest {
     @Test
     void submit_order_records_command() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
-
         SubmitOrderCommand cmd = submitCmd(
                 OrderType.LAB, "John Smith",
                 "Dr. Jones", "Blood glucose test",
@@ -152,7 +151,8 @@ class OrderManagerTest {
         orderManager.handle(cmd);
 
         // Assert
-        verify(commandLog).record(eq("SUBMIT"),
+        verify(commandLog).record(
+                eq("SUBMIT"),
                 anyString(),
                 eq("Dr. Jones"),
                 any(Command.class));
@@ -163,15 +163,13 @@ class OrderManagerTest {
     @Test
     void claim_order_sets_status_to_in_progress() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
         when(staffAccess.exists("Nurse Williams"))
                 .thenReturn(true);
 
         Order order = orderManager.handle(submitCmd(
                 OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test", Priority.ROUTINE));
+                "Dr. Jones", "Blood test",
+                Priority.ROUTINE));
 
         when(orderAccess.findOrderById(order.getId()))
                 .thenReturn(Optional.of(order));
@@ -181,7 +179,8 @@ class OrderManagerTest {
                 "Nurse Williams"));
 
         // Assert
-        assertEquals(OrderStatus.IN_PROGRESS, order.getStatus());
+        assertEquals(OrderStatus.IN_PROGRESS,
+                order.getStatus());
         assertEquals("Nurse Williams", order.getClaimedBy());
     }
 
@@ -190,8 +189,6 @@ class OrderManagerTest {
         // Arrange
         when(staffAccess.exists("Unknown Person"))
                 .thenReturn(false);
-        // ← remove the submit setup and findOrderById stub
-        // validation fails before order is ever looked up
 
         // Act + Assert
         assertThrows(IllegalArgumentException.class, () ->
@@ -202,15 +199,13 @@ class OrderManagerTest {
     @Test
     void claim_already_claimed_order_throws_exception() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
         when(staffAccess.exists("Nurse Williams"))
                 .thenReturn(true);
 
         Order order = orderManager.handle(submitCmd(
                 OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test", Priority.ROUTINE));
+                "Dr. Jones", "Blood test",
+                Priority.ROUTINE));
 
         order.setStatus(OrderStatus.IN_PROGRESS);
         order.setClaimedBy("Nurse A");
@@ -229,15 +224,13 @@ class OrderManagerTest {
     @Test
     void complete_order_sets_status_to_completed() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
         when(staffAccess.exists("Nurse Williams"))
                 .thenReturn(true);
 
         Order order = orderManager.handle(submitCmd(
                 OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test", Priority.ROUTINE));
+                "Dr. Jones", "Blood test",
+                Priority.ROUTINE));
 
         order.setStatus(OrderStatus.IN_PROGRESS);
         order.setClaimedBy("Nurse Williams");
@@ -251,20 +244,26 @@ class OrderManagerTest {
 
         // Assert
         assertEquals(OrderStatus.COMPLETED, order.getStatus());
+        verify(notificationService)
+                .notifyClinician(eq("Dr. Jones"),
+                        any(Order.class),
+                        eq("COMPLETED"));
+        verify(notificationService)
+                .notifyStaff(eq("Nurse Williams"),
+                        any(Order.class),
+                        eq("COMPLETED"));
     }
 
     @Test
     void complete_by_different_staff_throws_exception() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
         when(staffAccess.exists("Nurse B"))
                 .thenReturn(true);
 
         Order order = orderManager.handle(submitCmd(
                 OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test", Priority.ROUTINE));
+                "Dr. Jones", "Blood test",
+                Priority.ROUTINE));
 
         order.setStatus(OrderStatus.IN_PROGRESS);
         order.setClaimedBy("Nurse A");
@@ -272,7 +271,7 @@ class OrderManagerTest {
         when(orderAccess.findOrderById(order.getId()))
                 .thenReturn(Optional.of(order));
 
-        // Act + Assert — different staff cannot complete
+        // Act + Assert
         assertThrows(IllegalArgumentException.class, () ->
                 orderManager.handle(completeCmd(order.getId(),
                         "Nurse B")));
@@ -283,8 +282,6 @@ class OrderManagerTest {
         // Arrange
         when(staffAccess.exists("Unknown"))
                 .thenReturn(false);
-        // ← remove the findOrderById stub
-        // validation fails before order is ever looked up
 
         // Act + Assert
         assertThrows(IllegalArgumentException.class, () ->
@@ -297,15 +294,13 @@ class OrderManagerTest {
     @Test
     void cancel_order_sets_status_to_cancelled() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
         when(clinicianAccess.exists("Dr. Jones"))
                 .thenReturn(true);
 
         Order order = orderManager.handle(submitCmd(
                 OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test", Priority.ROUTINE));
+                "Dr. Jones", "Blood test",
+                Priority.ROUTINE));
 
         when(orderAccess.findOrderById(order.getId()))
                 .thenReturn(Optional.of(order));
@@ -316,6 +311,10 @@ class OrderManagerTest {
 
         // Assert
         assertEquals(OrderStatus.CANCELLED, order.getStatus());
+        verify(notificationService)
+                .notifyClinician(eq("Dr. Jones"),
+                        any(Order.class),
+                        eq("CANCELLED"));
     }
 
     @Test
@@ -324,29 +323,27 @@ class OrderManagerTest {
         when(clinicianAccess.exists("Nurse Williams"))
                 .thenReturn(false);
 
-        // Act + Assert — staff cannot cancel
+        // Act + Assert
         assertThrows(IllegalArgumentException.class, () ->
-                orderManager.handle(cancelCmd("order-1",
+                orderManager.handle(cancelCmd("any-order-id",
                         "Nurse Williams")));
     }
 
     @Test
     void cancel_by_different_clinician_throws_exception() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
         when(clinicianAccess.exists("Dr. Smith"))
                 .thenReturn(true);
 
         Order order = orderManager.handle(submitCmd(
                 OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test", Priority.ROUTINE));
+                "Dr. Jones", "Blood test",
+                Priority.ROUTINE));
 
         when(orderAccess.findOrderById(order.getId()))
                 .thenReturn(Optional.of(order));
 
-        // Act + Assert — different clinician cannot cancel
+        // Act + Assert
         assertThrows(IllegalArgumentException.class, () ->
                 orderManager.handle(cancelCmd(order.getId(),
                         "Dr. Smith")));
@@ -355,15 +352,13 @@ class OrderManagerTest {
     @Test
     void cancel_non_pending_order_throws_exception() {
         // Arrange
-        when(orderAccess.listPendingOrders()).thenReturn(List.of());
-        when(triagingEngine.assignPosition(any(), any()))
-                .thenReturn(List.of());
         when(clinicianAccess.exists("Dr. Jones"))
                 .thenReturn(true);
 
         Order order = orderManager.handle(submitCmd(
                 OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test", Priority.ROUTINE));
+                "Dr. Jones", "Blood test",
+                Priority.ROUTINE));
 
         order.setStatus(OrderStatus.IN_PROGRESS);
 
