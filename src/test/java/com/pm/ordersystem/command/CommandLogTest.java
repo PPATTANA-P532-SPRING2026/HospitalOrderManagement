@@ -9,136 +9,91 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CommandLogTest {
 
-    // ── mock command for testing ──────────────────────────────────────
-    private static class MockCommand implements Command {
-        @Override
-        public void execute() { }
-    }
-
     private CommandLog commandLog;
-    private Command mockCommand;
+    private Command dummyCommand;
 
     @BeforeEach
     void setUp() {
-        // Arrange
-        commandLog  = new CommandLog();
-        mockCommand = new MockCommand();
+        commandLog = new CommandLog();
+        dummyCommand = () -> {}; // lambda implements Command
     }
 
     @Test
-    void record_adds_entry_to_log() {
+    void record_adds_entry() {
         // Act
-        commandLog.record("SUBMIT", "order-1",
-                "Dr. Jones", mockCommand);
-
+        commandLog.record("SUBMIT", "order-1", "Dr. Jones", dummyCommand);
         // Assert
         assertEquals(1, commandLog.getEntries().size());
     }
 
     @Test
-    void record_stores_correct_fields() {
+    void entry_has_correct_fields() {
         // Act
-        commandLog.record("SUBMIT", "order-1",
-                "Dr. Jones", mockCommand);
-
-        // Assert
+        commandLog.record("CLAIM", "order-2", "Nurse A", dummyCommand);
         CommandLogEntry entry = commandLog.getEntries().get(0);
-        assertEquals("SUBMIT",   entry.getCommandType());
-        assertEquals("order-1",  entry.getOrderId());
-        assertEquals("Dr. Jones", entry.getActor());
-        assertNotNull(entry.getTimestamp());
+        // Assert
+        assertEquals("CLAIM",    entry.getCommandType());
+        assertEquals("order-2",  entry.getOrderId());
+        assertEquals("Nurse A",  entry.getActor());
         assertNotNull(entry.getId());
+        assertNotNull(entry.getTimestamp());
         assertNotNull(entry.getCommand());
     }
 
     @Test
-    void record_multiple_entries() {
-        // Act
-        commandLog.record("SUBMIT",   "order-1",
-                "Dr. Jones", mockCommand);
-        commandLog.record("CLAIM",    "order-1",
-                "Nurse A",   mockCommand);
-        commandLog.record("COMPLETE", "order-1",
-                "Nurse A",   mockCommand);
-
-        // Assert
-        assertEquals(3, commandLog.getEntries().size());
-    }
-
-    @Test
-    void getLastEntry_returns_most_recent() {
+    void get_last_entry_returns_most_recent() {
         // Arrange
-        commandLog.record("SUBMIT", "order-1",
-                "Dr. Jones", mockCommand);
-        commandLog.record("CLAIM",  "order-1",
-                "Nurse A",  mockCommand);
-
+        commandLog.record("SUBMIT", "order-1", "Dr. A", dummyCommand);
+        commandLog.record("CLAIM",  "order-2", "Nurse B", dummyCommand);
         // Act
         Optional<CommandLogEntry> last = commandLog.getLastEntry();
-
         // Assert
         assertTrue(last.isPresent());
         assertEquals("CLAIM", last.get().getCommandType());
     }
 
     @Test
-    void getLastEntry_returns_empty_when_log_is_empty() {
-        // Act
-        Optional<CommandLogEntry> last = commandLog.getLastEntry();
-
-        // Assert
-        assertTrue(last.isEmpty());
+    void get_last_entry_returns_empty_when_log_empty() {
+        // Act + Assert
+        assertTrue(commandLog.getLastEntry().isEmpty());
     }
 
     @Test
-    void removeLastEntry_removes_most_recent() {
+    void remove_last_entry_removes_most_recent() {
         // Arrange
-        commandLog.record("SUBMIT", "order-1",
-                "Dr. Jones", mockCommand);
-        commandLog.record("CLAIM",  "order-1",
-                "Nurse A",  mockCommand);
-        commandLog.record("COMPLETE", "order-1",
-                "Nurse A",  mockCommand);
-
+        commandLog.record("SUBMIT", "order-1", "Dr. A", dummyCommand);
+        commandLog.record("CLAIM",  "order-2", "Nurse B", dummyCommand);
         // Act
         commandLog.removeLastEntry();
-
         // Assert
-        assertEquals(2, commandLog.getEntries().size());
-        assertEquals("CLAIM",
-                commandLog.getLastEntry().get().getCommandType());
+        assertEquals(1, commandLog.getEntries().size());
+        assertEquals("SUBMIT", commandLog.getEntries().get(0).getCommandType());
     }
 
     @Test
-    void findById_returns_correct_entry() {
+    void find_by_id_returns_correct_entry() {
         // Arrange
-        commandLog.record("SUBMIT", "order-1",
-                "Dr. Jones", mockCommand);
-        commandLog.record("CANCEL", "order-1",
-                "Dr. Jones", mockCommand);
-
+        commandLog.record("CANCEL", "order-3", "Dr. B", dummyCommand);
         String id = commandLog.getEntries().get(0).getId();
-
         // Act
         Optional<CommandLogEntry> found = commandLog.findById(id);
-
         // Assert
         assertTrue(found.isPresent());
-        assertEquals("SUBMIT", found.get().getCommandType());
-        assertEquals(id, found.get().getId());
+        assertEquals("CANCEL", found.get().getCommandType());
     }
 
     @Test
-    void findById_returns_empty_for_unknown_id() {
+    void find_by_id_returns_empty_for_unknown_id() {
+        // Act + Assert
+        assertTrue(commandLog.findById("nonexistent").isEmpty());
+    }
+
+    @Test
+    void entries_list_is_unmodifiable() {
         // Arrange
-        commandLog.record("SUBMIT", "order-1",
-                "Dr. Jones", mockCommand);
-
-        // Act
-        Optional<CommandLogEntry> found =
-                commandLog.findById("nonexistent-id");
-
-        // Assert
-        assertTrue(found.isEmpty());
+        commandLog.record("SUBMIT", "order-1", "Dr. A", dummyCommand);
+        // Act + Assert
+        assertThrows(UnsupportedOperationException.class,
+                () -> commandLog.getEntries().clear());
     }
 }

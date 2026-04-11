@@ -18,32 +18,27 @@ public class AuditController {
         this.orderManager = orderManager;
     }
 
-    // ── GET /api/audit
     @GetMapping
     public List<CommandLogEntry> getAuditLog() {
         return orderManager.getAuditLog();
     }
 
-    //  POST /api/audit/undo
     @PostMapping("/undo")
     public ResponseEntity<?> undoLast() {
         try {
             orderManager.undoLast();
             return ResponseEntity.ok("Last command undone");
-        } catch (IllegalStateException |
-                 IllegalArgumentException e) {
+        } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-    //  POST /api/audit/replay/{id}
     @PostMapping("/replay/{id}")
     public ResponseEntity<?> replay(@PathVariable String id) {
         try {
             Order order = orderManager.replay(id);
             return ResponseEntity.ok(order);
-        } catch (IllegalStateException |
-                 IllegalArgumentException e) {
+        } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }

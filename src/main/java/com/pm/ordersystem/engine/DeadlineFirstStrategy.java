@@ -1,11 +1,10 @@
 package com.pm.ordersystem.engine;
 
-import com.pm.ordersystem.model.enums.OrderType;
-import com.pm.ordersystem.model.enums.Priority;
 import com.pm.ordersystem.model.order.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -20,41 +19,47 @@ public class DeadlineFirstStrategy implements TriageStrategy {
         this.clock = clock;
     }
 
+    public long getDeadlineMinutes(Order order) {
+        return switch (order.getType()) {
+            case LAB -> switch (order.getPriority()) {
+                case STAT -> 30;
+                case URGENT -> 120;
+                case ROUTINE -> 480;
+            };
+            case MEDICATION -> switch (order.getPriority()) {
+                case STAT -> 15;
+                case URGENT -> 60;
+                case ROUTINE -> 240;
+            };
+            case IMAGING -> switch (order.getPriority()) {
+                case STAT -> 45;
+                case URGENT -> 180;
+                case ROUTINE -> 720;
+            };
+        };
+    }
+
+    public long minutesRemaining(Order order) {
+        LocalDateTime deadline = order.getTimestamp().plusMinutes(getDeadlineMinutes(order));
+        LocalDateTime now = LocalDateTime.now(clock);
+        return Duration.between(now, deadline).toMinutes();
+    }
+
     @Override
-    public List<Order> insertIntoQueue(Order order,
-                                       List<Order> currentQueue) {
+    public List<Order> insertIntoQueue(Order order, List<Order> currentQueue) {
         List<Order> queue = new ArrayList<>(currentQueue);
         queue.add(order);
-
-        // sort by ascending time-to-deadline
-        queue.sort(Comparator.comparing(this::getDeadline));
+        queue.sort(Comparator.comparingLong(this::minutesRemaining)
+                .thenComparing(Order::getTimestamp));
         return queue;
     }
 
-    public LocalDateTime getDeadline(Order order) {
-        int minutes = deadlineMinutes(
-                order.getType(), order.getPriority());
-        return order.getTimestamp().plusMinutes(minutes);
-    }
-
-    private int deadlineMinutes(OrderType type,
-                                Priority priority) {
-        return switch (priority) {
-            case STAT -> switch (type) {
-                case LAB        -> 30;
-                case MEDICATION -> 20;
-                case IMAGING    -> 45;
-            };
-            case URGENT -> switch (type) {
-                case LAB        -> 120;
-                case MEDICATION -> 60;
-                case IMAGING    -> 180;
-            };
-            case ROUTINE -> switch (type) {
-                case LAB        -> 480;
-                case MEDICATION -> 240;
-                case IMAGING    -> 720;
-            };
-        };
+    @Override
+    public int compare(Order a, Order b) {
+        int cmp = Long.compare(minutesRemaining(a), minutesRemaining(b));
+        if (cmp != 0) {
+            return cmp;
+        }
+        return a.getTimestamp().compareTo(b.getTimestamp());
     }
 }

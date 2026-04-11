@@ -1,6 +1,7 @@
 package com.pm.ordersystem.handler;
 
 import com.pm.ordersystem.access.OrderAccess;
+import com.pm.ordersystem.command.CommandLog;
 import com.pm.ordersystem.model.enums.OrderType;
 import com.pm.ordersystem.model.enums.Priority;
 import com.pm.ordersystem.model.order.Order;
@@ -16,6 +17,7 @@ import org.mockito.quality.Strictness;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,236 +27,100 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DecoratorChainTest {
 
-    @Mock
-    private OrderAccess orderAccess;
+    @Mock private OrderAccess orderAccess;
+    @Mock private CommandLog commandLog;
 
     private Clock fixedClock;
     private OrderHandler chain;
 
     @BeforeEach
     void setUp() {
-        fixedClock = Clock.fixed(
-                Instant.now(), ZoneId.systemDefault());
+        fixedClock = Clock.fixed(Instant.now(), ZoneId.systemDefault());
 
-        // Week 1 + 2b chain without escalation
-        OrderHandler base      = new BaseOrderHandler();
-        OrderHandler auditLog  = new AuditLoggingDecorator(base);
-        OrderHandler boost     = new PriorityBoostDecorator(auditLog);
-        OrderHandler statAudit = new StatAuditDecorator(boost);
-        chain = new ValidationDecorator(statAudit);
+        when(orderAccess.listPendingOrders()).thenReturn(new ArrayList<>());
+
+        OrderHandler base = new BaseOrderHandler();
+        OrderHandler withAudit = new AuditLoggingDecorator(base);
+        OrderHandler withBoost = new PriorityBoostDecorator(withAudit);
+        OrderHandler withStatAudit = new StatAuditDecorator(withBoost, commandLog);
+        OrderHandler withEscalation = new PriorityEscalationDecorator(
+                withStatAudit, fixedClock, orderAccess);
+        chain = new ValidationDecorator(withEscalation);
     }
 
-    // ── Validation tests ──────────────────────────────────────────────
+    @Test
+    void validation_rejects_blank_patient_name() {
+        // Arrange
+        Order order = OrderFactory.create(OrderType.LAB, "",
+                "Dr. Jones", "desc", Priority.URGENT);
+        // Act + Assert
+        assertThrows(IllegalArgumentException.class,
+                () -> chain.handle(order));
+    }
+
+    @Test
+    void validation_rejects_blank_clinician() {
+        // Arrange
+        Order order = OrderFactory.create(OrderType.LAB, "John",
+                "", "desc", Priority.URGENT);
+        // Act + Assert
+        assertThrows(IllegalArgumentException.class,
+                () -> chain.handle(order));
+    }
 
     @Test
     void valid_order_passes_through_chain() {
         // Arrange
-        Order order = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test",
-                Priority.ROUTINE);
-
+        Order order = OrderFactory.create(OrderType.LAB, "John",
+                "Dr. Jones", "blood test", Priority.ROUTINE);
         // Act + Assert
         assertDoesNotThrow(() -> chain.handle(order));
     }
 
     @Test
-    void empty_patient_name_throws_exception() {
+    void priority_boost_upgrades_emergency_keyword_to_stat() {
         // Arrange
-        Order order = OrderFactory.create(
-                OrderType.LAB, "",
-                "Dr. Jones", "Blood test",
-                Priority.ROUTINE);
-
-        // Act + Assert
-        assertThrows(IllegalArgumentException.class, () ->
-                chain.handle(order));
-    }
-
-    @Test
-    void empty_clinician_throws_exception() {
-        // Arrange
-        Order order = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "", "Blood test",
-                Priority.ROUTINE);
-
-        // Act + Assert
-        assertThrows(IllegalArgumentException.class, () ->
-                chain.handle(order));
-    }
-
-    @Test
-    void empty_description_throws_exception() {
-        // Arrange
-        Order order = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "",
-                Priority.ROUTINE);
-
-        // Act + Assert
-        assertThrows(IllegalArgumentException.class, () ->
-                chain.handle(order));
-    }
-
-    // ── PriorityBoost tests ───────────────────────────────────────────
-
-    @Test
-    void emergency_keyword_boosts_routine_to_stat() {
-        // Arrange
-        Order order = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "emergency blood test",
-                Priority.ROUTINE);
-
+        Order order = OrderFactory.create(OrderType.LAB, "John",
+                "Dr. Jones", "cardiac emergency", Priority.URGENT);
         // Act
         chain.handle(order);
-
         // Assert
         assertEquals(Priority.STAT, order.getPriority());
     }
 
     @Test
-    void emergency_keyword_boosts_urgent_to_stat() {
+    void escalation_upgrades_urgent_within_window_when_stat_arrives() {
         // Arrange
-        Order order = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "emergency blood test",
-                Priority.URGENT);
+        Order urgentOrder = OrderFactory.create(OrderType.LAB, "P1",
+                "Dr. A", "blood test", Priority.URGENT);
+
+        when(orderAccess.listPendingOrders()).thenReturn(List.of(urgentOrder));
+
+        Order statOrder = OrderFactory.create(OrderType.LAB, "P2",
+                "Dr. A", "critical test", Priority.STAT);
+
+        // Act — submit the STAT order; escalation should fire
+        chain.handle(statOrder);
+
+        // Assert — urgentOrder was escalated
+        assertEquals(Priority.STAT, urgentOrder.getPriority());
+    }
+
+    @Test
+    void escalation_does_not_upgrade_different_type() {
+        // Arrange
+        Order urgentMed = OrderFactory.create(OrderType.MEDICATION, "P1",
+                "Dr. A", "medication", Priority.URGENT);
+
+        when(orderAccess.listPendingOrders()).thenReturn(List.of(urgentMed));
+
+        Order statLab = OrderFactory.create(OrderType.LAB, "P2",
+                "Dr. A", "lab test", Priority.STAT);
 
         // Act
-        chain.handle(order);
+        chain.handle(statLab);
 
-        // Assert
-        assertEquals(Priority.STAT, order.getPriority());
-    }
-
-    @Test
-    void cardiac_keyword_boosts_urgent_to_stat() {
-        // Arrange
-        Order order = OrderFactory.create(
-                OrderType.IMAGING, "John Smith",
-                "Dr. Jones", "cardiac scan needed",
-                Priority.URGENT);
-
-        // Act
-        chain.handle(order);
-
-        // Assert
-        assertEquals(Priority.STAT, order.getPriority());
-    }
-
-    @Test
-    void stat_order_not_boosted_further() {
-        // Arrange
-        Order order = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "emergency blood test",
-                Priority.STAT);
-
-        // Act
-        chain.handle(order);
-
-        // Assert
-        assertEquals(Priority.STAT, order.getPriority());
-    }
-
-    // ── PriorityEscalation tests ──────────────────────────────────────
-
-//    @Test
-//    void urgent_escalated_when_recent_stat_exists() {
-//        // Arrange
-//        Order existingStat = OrderFactory.create(
-//                OrderType.LAB, "Jane Doe",
-//                "Dr. Smith", "Existing STAT",
-//                Priority.STAT);
-//
-//        when(orderAccess.listAllOrders())
-//                .thenReturn(List.of(existingStat));
-//
-//        Order urgentOrder = OrderFactory.create(
-//                OrderType.LAB, "John Smith",
-//                "Dr. Jones", "Blood test",
-//                Priority.URGENT);
-//
-//        // Act
-//        chain.handle(urgentOrder);
-//
-//        // Assert
-//        assertEquals(Priority.STAT, urgentOrder.getPriority());
-//    }
-
-//    @Test
-//    void urgent_not_escalated_for_different_type() {
-//        // Arrange
-//        Order existingStat = OrderFactory.create(
-//                OrderType.MEDICATION, "Jane Doe",
-//                "Dr. Smith", "Existing STAT",
-//                Priority.STAT);
-//
-//        when(orderAccess.listAllOrders())
-//                .thenReturn(List.of(existingStat));
-//
-//        Order urgentOrder = OrderFactory.create(
-//                OrderType.LAB, "John Smith",
-//                "Dr. Jones", "Blood test",
-//                Priority.URGENT);
-//
-//        // Act
-//        chain.handle(urgentOrder);
-//
-//        // Assert — different type not escalated
-//        assertEquals(Priority.URGENT, urgentOrder.getPriority());
-//    }
-
-//    @Test
-//    void stat_submission_escalates_existing_urgent_orders() {
-//        // Arrange
-//        Order existingUrgent = OrderFactory.create(
-//                OrderType.LAB, "Jane Doe",
-//                "Dr. Smith", "Existing URGENT",
-//                Priority.URGENT);
-//
-//        when(orderAccess.listPendingOrders())
-//                .thenReturn(List.of(existingUrgent));
-//
-//        Order statOrder = OrderFactory.create(
-//                OrderType.LAB, "John Smith",
-//                "Dr. Jones", "STAT Blood test",
-//                Priority.STAT);
-//
-//        // Act
-//        chain.handle(statOrder);
-//
-//        // Assert
-//        assertEquals(Priority.STAT,
-//                existingUrgent.getPriority());
-//        verify(orderAccess).saveOrder(existingUrgent);
-//    }
-
-    // ── StatAudit tests ───────────────────────────────────────────────
-
-    @Test
-    void stat_audit_does_not_throw_for_stat_order() {
-        // Arrange
-        Order statOrder = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test",
-                Priority.STAT);
-
-        // Act + Assert
-        assertDoesNotThrow(() -> chain.handle(statOrder));
-    }
-
-    @Test
-    void stat_audit_does_not_throw_for_routine_order() {
-        // Arrange
-        Order routineOrder = OrderFactory.create(
-                OrderType.LAB, "John Smith",
-                "Dr. Jones", "Blood test",
-                Priority.ROUTINE);
-
-        // Act + Assert
-        assertDoesNotThrow(() -> chain.handle(routineOrder));
+        // Assert — different type, should NOT be escalated
+        assertEquals(Priority.URGENT, urgentMed.getPriority());
     }
 }

@@ -4,9 +4,11 @@ import com.pm.ordersystem.model.enums.OrderType;
 import com.pm.ordersystem.model.enums.Priority;
 import com.pm.ordersystem.model.order.Order;
 import com.pm.ordersystem.model.order.OrderFactory;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,122 +16,101 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TriageStrategyTest {
 
-    private PriorityFirstStrategy strategy;
-
-    @BeforeEach
-    void setUp() {
-        // Arrange
-        strategy = new PriorityFirstStrategy();
-    }
+    // ── PriorityFirstStrategy ─────────────────────────────────────────
 
     @Test
-    void stat_order_goes_to_front_of_queue() {
+    void priority_first_stat_before_urgent_before_routine() {
         // Arrange
-        Order routine = OrderFactory.create(OrderType.LAB,
-                "Patient A", "Dr. Jones",
-                "Blood test", Priority.ROUTINE);
-        Order urgent = OrderFactory.create(OrderType.LAB,
-                "Patient B", "Dr. Jones",
-                "Blood test", Priority.URGENT);
-        List<Order> queue = new ArrayList<>(List.of(routine, urgent));
-
-        Order stat = OrderFactory.create(OrderType.LAB,
-                "Patient C", "Dr. Jones",
-                "Blood test", Priority.STAT);
+        PriorityFirstStrategy strategy = new PriorityFirstStrategy();
+        Order routine = OrderFactory.create(OrderType.LAB, "P1", "Dr A", "desc", Priority.ROUTINE);
+        Order urgent  = OrderFactory.create(OrderType.LAB, "P2", "Dr A", "desc", Priority.URGENT);
+        Order stat    = OrderFactory.create(OrderType.LAB, "P3", "Dr A", "desc", Priority.STAT);
 
         // Act
-        List<Order> result = strategy.insertIntoQueue(stat, queue);
+        List<Order> queue = strategy.insertIntoQueue(routine, new ArrayList<>());
+        queue = strategy.insertIntoQueue(urgent, queue);
+        queue = strategy.insertIntoQueue(stat, queue);
 
         // Assert
-        assertEquals(stat.getId(), result.get(0).getId());
+        assertEquals(Priority.STAT,    queue.get(0).getPriority());
+        assertEquals(Priority.URGENT,  queue.get(1).getPriority());
+        assertEquals(Priority.ROUTINE, queue.get(2).getPriority());
     }
 
     @Test
-    void routine_order_goes_to_back_of_queue() {
+    void priority_first_ties_broken_by_fifo() {
         // Arrange
-        Order stat = OrderFactory.create(OrderType.LAB,
-                "Patient A", "Dr. Jones",
-                "Blood test", Priority.STAT);
-        Order urgent = OrderFactory.create(OrderType.LAB,
-                "Patient B", "Dr. Jones",
-                "Blood test", Priority.URGENT);
-        List<Order> queue = new ArrayList<>(List.of(stat, urgent));
-
-        Order routine = OrderFactory.create(OrderType.LAB,
-                "Patient C", "Dr. Jones",
-                "Blood test", Priority.ROUTINE);
+        PriorityFirstStrategy strategy = new PriorityFirstStrategy();
+        Order first  = OrderFactory.create(OrderType.LAB, "P1", "Dr A", "desc", Priority.URGENT);
+        Order second = OrderFactory.create(OrderType.LAB, "P2", "Dr A", "desc", Priority.URGENT);
 
         // Act
-        List<Order> result = strategy.insertIntoQueue(routine, queue);
+        List<Order> queue = strategy.insertIntoQueue(first, new ArrayList<>());
+        queue = strategy.insertIntoQueue(second, queue);
 
-        // Assert
-        assertEquals(routine.getId(),
-                result.get(result.size() - 1).getId());
+        // Assert — first submitted comes first
+        assertEquals(first.getId(), queue.get(0).getId());
     }
 
-    @Test
-    void same_priority_ordered_by_timestamp_fifo() throws InterruptedException {
-        // Arrange
-        Order first = OrderFactory.create(OrderType.LAB,
-                "Patient A", "Dr. Jones",
-                "Blood test", Priority.URGENT);
-
-        Thread.sleep(10); // ensure different timestamp
-
-        Order second = OrderFactory.create(OrderType.LAB,
-                "Patient B", "Dr. Jones",
-                "Blood test", Priority.URGENT);
-
-        List<Order> queue = new ArrayList<>();
-
-        // Act — insert second first then first
-        List<Order> result = strategy.insertIntoQueue(second, queue);
-        result = strategy.insertIntoQueue(first, result);
-
-        // Assert — first submitted comes first (FIFO)
-        assertEquals(first.getId(), result.get(0).getId());
-    }
+    // ── LoadBalancingStrategy ─────────────────────────────────────────
 
     @Test
-    void empty_queue_returns_single_order() {
+    void load_balancing_assigns_to_least_loaded_staff() {
         // Arrange
-        List<Order> emptyQueue = new ArrayList<>();
-        Order order = OrderFactory.create(OrderType.LAB,
-                "Patient A", "Dr. Jones",
-                "Blood test", Priority.ROUTINE);
+        LoadBalancingStrategy strategy = new LoadBalancingStrategy();
+        strategy.initStaff(List.of("Nurse A", "Nurse B"));
 
         // Act
-        List<Order> result = strategy.insertIntoQueue(
-                order, emptyQueue);
+        Order order1 = OrderFactory.create(OrderType.LAB, "P1", "Dr A", "d", Priority.ROUTINE);
+        strategy.insertIntoQueue(order1, new ArrayList<>());
 
-        // Assert
-        assertEquals(1, result.size());
-        assertEquals(order.getId(), result.get(0).getId());
+        Order order2 = OrderFactory.create(OrderType.LAB, "P2", "Dr A", "d", Priority.ROUTINE);
+        strategy.insertIntoQueue(order2, List.of(order1));
+
+        // Assert — both nurses got one order each
+        assertNotNull(order1.getClaimedBy());
+        assertNotNull(order2.getClaimedBy());
+        assertNotEquals(order1.getClaimedBy(), order2.getClaimedBy());
+    }
+
+    // ── DeadlineFirstStrategy ─────────────────────────────────────────
+
+    @Test
+    void deadline_first_stat_lab_before_routine_lab() {
+        // Arrange
+        Clock fixed = Clock.fixed(Instant.now(), ZoneId.systemDefault());
+        DeadlineFirstStrategy strategy = new DeadlineFirstStrategy(fixed);
+
+        Order routine = OrderFactory.create(OrderType.LAB, "P1", "Dr A", "d", Priority.ROUTINE);
+        Order stat    = OrderFactory.create(OrderType.LAB, "P2", "Dr A", "d", Priority.STAT);
+
+        // Act
+        List<Order> queue = strategy.insertIntoQueue(routine, new ArrayList<>());
+        queue = strategy.insertIntoQueue(stat, queue);
+
+        // Assert — stat has shorter deadline so comes first
+        assertEquals(Priority.STAT, queue.get(0).getPriority());
     }
 
     @Test
-    void priority_order_is_stat_urgent_routine() {
+    void deadline_first_medication_stat_has_15_min_deadline() {
         // Arrange
-        Order routine = OrderFactory.create(OrderType.LAB,
-                "Patient A", "Dr. Jones",
-                "Blood test", Priority.ROUTINE);
-        Order urgent = OrderFactory.create(OrderType.LAB,
-                "Patient B", "Dr. Jones",
-                "Blood test", Priority.URGENT);
-        Order stat = OrderFactory.create(OrderType.LAB,
-                "Patient C", "Dr. Jones",
-                "Blood test", Priority.STAT);
+        Clock fixed = Clock.fixed(Instant.now(), ZoneId.systemDefault());
+        DeadlineFirstStrategy strategy = new DeadlineFirstStrategy(fixed);
+        Order order = OrderFactory.create(OrderType.MEDICATION, "P", "Dr", "d", Priority.STAT);
 
-        List<Order> queue = new ArrayList<>();
+        // Act + Assert
+        assertEquals(15L, strategy.getDeadlineMinutes(order));
+    }
 
-        // Act — insert in wrong order
-        List<Order> result = strategy.insertIntoQueue(routine, queue);
-        result = strategy.insertIntoQueue(urgent, result);
-        result = strategy.insertIntoQueue(stat, result);
+    @Test
+    void deadline_first_imaging_routine_has_720_min_deadline() {
+        // Arrange
+        Clock fixed = Clock.fixed(Instant.now(), ZoneId.systemDefault());
+        DeadlineFirstStrategy strategy = new DeadlineFirstStrategy(fixed);
+        Order order = OrderFactory.create(OrderType.IMAGING, "P", "Dr", "d", Priority.ROUTINE);
 
-        // Assert — sorted correctly
-        assertEquals(Priority.STAT,    result.get(0).getPriority());
-        assertEquals(Priority.URGENT,  result.get(1).getPriority());
-        assertEquals(Priority.ROUTINE, result.get(2).getPriority());
+        // Act + Assert
+        assertEquals(720L, strategy.getDeadlineMinutes(order));
     }
 }

@@ -2,8 +2,6 @@ package com.pm.ordersystem.handler;
 
 import com.pm.ordersystem.model.order.Order;
 
-import java.time.LocalDateTime;
-
 public class AuditLoggingDecorator implements OrderHandler {
 
     private final OrderHandler wrapped;
@@ -14,15 +12,12 @@ public class AuditLoggingDecorator implements OrderHandler {
 
     @Override
     public void handle(Order order) {
-        // log before passing down chain
-        System.out.println("[AUDIT] "
-                + LocalDateTime.now()
-                + " | Order: " + order.getId()
-                + " | Type: "     + order.getType()
-                + " | Patient: "  + order.getPatientName()
-                + " | Priority: " + order.getPriority()
-                + " | Clinician: "+ order.getClinician());
-
+        System.out.println("[AUDIT LOG] order=" + order.getId()
+                + " | type=" + order.getType()
+                + " | patient=" + order.getPatientName()
+                + " | clinician=" + order.getClinician()
+                + " | priority=" + order.getPriority()
+                + " | status=" + order.getStatus());
 
         wrapped.handle(order);
     }

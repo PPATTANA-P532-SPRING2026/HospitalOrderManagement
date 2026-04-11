@@ -12,83 +12,39 @@ import java.util.List;
 public class PriorityEscalationDecorator implements OrderHandler {
 
     private final OrderHandler wrapped;
-    private final OrderAccess orderAccess;
     private final Clock clock;
+    private final OrderAccess orderAccess;
 
-    private static final int WINDOW_MINUTES = 5;
+    private static final long ESCALATION_WINDOW_MINUTES = 5;
 
     public PriorityEscalationDecorator(OrderHandler wrapped,
-                                       OrderAccess orderAccess,
-                                       Clock clock) {
+                                       Clock clock,
+                                       OrderAccess orderAccess) {
         this.wrapped     = wrapped;
-        this.orderAccess = orderAccess;
         this.clock       = clock;
+        this.orderAccess = orderAccess;
     }
 
     @Override
     public void handle(Order order) {
-
-        // if incoming order is STAT —
-        // escalate recent URGENT orders of same type
+        // when a STAT order arrives, escalate recent URGENT orders of same type
         if (order.getPriority() == Priority.STAT) {
-            escalateRecentUrgentOrders(order);
-        }
+            LocalDateTime cutoff = LocalDateTime.now(clock)
+                    .minusMinutes(ESCALATION_WINDOW_MINUTES);
 
-        // if incoming order is URGENT —
-        // check if a recent STAT of same type exists
-        // if so upgrade this order to STAT too
-        if (order.getPriority() == Priority.URGENT) {
-            checkAndEscalate(order);
+            List<Order> pending = orderAccess.listPendingOrders();
+            for (Order existing : pending) {
+                if (existing.getType() == order.getType()
+                        && existing.getPriority() == Priority.URGENT
+                        && existing.getTimestamp().isAfter(cutoff)) {
+
+                    existing.setPriority(Priority.STAT);
+                    System.out.println("[ESCALATION] Order " + existing.getId()
+                            + " escalated URGENT → STAT (same type as incoming STAT)");
+                }
+            }
         }
 
         wrapped.handle(order);
-    }
-
-    // ── escalate existing URGENT orders of same type ──────────────────
-    private void escalateRecentUrgentOrders(Order statOrder) {
-        LocalDateTime windowStart = LocalDateTime
-                .now(clock)
-                .minusMinutes(WINDOW_MINUTES);
-
-        List<Order> pendingOrders = orderAccess.listPendingOrders();
-
-        for (Order existing : pendingOrders) {
-            if (!existing.getId().equals(statOrder.getId()) // ← exclude self
-                    && existing.getPriority() == Priority.URGENT
-                    && existing.getType() == statOrder.getType()
-                    && existing.getStatus() == OrderStatus.PENDING
-                    && existing.getTimestamp().isAfter(windowStart)) {
-
-                existing.setPriority(Priority.STAT);
-                orderAccess.saveOrder(existing);
-                System.out.println("[ESCALATION] Order "
-                        + existing.getId()
-                        + " upgraded URGENT -> STAT");
-            }
-        }
-    }
-
-    // ── check if incoming URGENT should be escalated ──────────────────
-    private void checkAndEscalate(Order urgentOrder) {
-        LocalDateTime windowStart = LocalDateTime
-                .now(clock)
-                .minusMinutes(WINDOW_MINUTES);
-
-        boolean recentStatExists = orderAccess
-                .listAllOrders()
-                .stream()
-                .anyMatch(o ->
-                        !o.getId().equals(urgentOrder.getId()) // ← exclude self
-                                && o.getPriority() == Priority.STAT
-                                && o.getType() == urgentOrder.getType()
-                                && o.getTimestamp().isAfter(windowStart));
-
-        if (recentStatExists) {
-            urgentOrder.setPriority(Priority.STAT);
-            System.out.println("[ESCALATION] URGENT order "
-                    + urgentOrder.getId()
-                    + " upgraded to STAT"
-                    + " (recent STAT of same type exists)");
-        }
     }
 }

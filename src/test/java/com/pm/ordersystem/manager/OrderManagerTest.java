@@ -91,6 +91,7 @@ class OrderManagerTest {
 
         orderManager = new OrderManager(
                 orderAccess,
+                staffAccess,
                 triagingEngine,
                 orderHandler,
                 commandLog,
